@@ -2,7 +2,7 @@
 // Server side C program to demonstrate Socket programming
 //
 // https://medium.com/from-the-scratch/http-server-what-do-you-need-to-know-to-build-a-simple-http-server-from-scratch-d1ef8945e4fa
-//
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -55,8 +55,8 @@ int main(int argc, char const *argv[])
             exit(EXIT_FAILURE);
         }
         
-        const char raw_request[30000] = {0};
-        valread = read( new_socket , (char *)raw_request, 30000);
+        char raw_request[30000] = {0};
+        valread = read( new_socket , raw_request, 30000);
         printf("%s\n", raw_request );
 
         Response *response = handle_request(raw_request);
