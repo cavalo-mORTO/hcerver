@@ -3,9 +3,9 @@
 
 #include "lib.h"
 
-struct Request *parse_request(char *raw) {
-    struct Request *req = NULL;
-    req = calloc(1, sizeof(struct Request));
+Request *parse_request(char *raw) {
+    Request *req = NULL;
+    req = calloc(1, sizeof(Request));
     if (!req) {
         return NULL;
     }
@@ -50,7 +50,7 @@ struct Request *parse_request(char *raw) {
     url_p += route_len + 1;
 
     // retrieve query
-    struct Dict *query = NULL, *last_q = NULL;
+    Dict *query = NULL, *last_q = NULL;
     while (*url_p)
     {
         size_t arg_len = min(strcspn(url_p, "="), strcspn(url_p, " "));
@@ -96,7 +96,7 @@ struct Request *parse_request(char *raw) {
     memcpy(req->version, raw, ver_len);
     raw += ver_len + 2; // move past <CR><LF>
 
-    struct Dict *header = NULL, *last = NULL;
+    Dict *header = NULL, *last = NULL;
     while (raw[0]!='\r' || raw[1]!='\n') {
         last = header;
         header = calloc(1, sizeof(Dict));

@@ -2,7 +2,7 @@
 
 #include "lib.h"
 
-void free_dict(struct Dict *d) {
+void free_dict(Dict *d) {
     if (d) {
         free(d->key);
         free(d->value);
@@ -11,7 +11,7 @@ void free_dict(struct Dict *d) {
     }
 }
 
-void free_request(struct Request *req) {
+void free_request(Request *req) {
     free(req->route);
     free(req->version);
     free_dict(req->queries);
@@ -20,7 +20,7 @@ void free_request(struct Request *req) {
     free(req);
 }
 
-void free_response(struct Response *resp) {
+void free_response(Response *resp) {
     free(resp->content);
     free_dict(resp->args);
     free(resp->file);

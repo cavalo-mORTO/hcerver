@@ -59,14 +59,15 @@ int main(int argc, char const *argv[])
         valread = read( new_socket , raw_request, 30000);
         printf("%s\n", raw_request );
 
-        Response *response = handle_request(raw_request);
+        char *response = handle_request(raw_request);
+        if (!response)
+            response = error();
 
-        write(new_socket , response->repr , strlen(response->repr));
+        write(new_socket , response , strlen(response));
         printf("------------------Response sent-------------------\n");
-        printf("%s", response->repr);
-
-        if (response)
-            free_response(response);
+        printf("%s", response);
+        free(response);
+        
         close(new_socket);
     }
     return 0;

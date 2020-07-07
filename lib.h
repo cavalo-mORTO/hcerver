@@ -41,13 +41,14 @@ char *read_file(const char *fname);
 char *str_replace(char *input, char *w_old, char *w_new);
 
 // request.c
-struct Request *parse_request(char *raw_request);
+Request *parse_request(char *raw_request);
 
 // response.c
-struct Response *handle_request(char *raw_request);
+char *handle_request(char *raw_request);
 void compose_response(Response *resp);
 void render_content(Response *resp);
 void append_arg(Response *resp, char *key, char *value);
+char *error();
 
 // free.c
 void free_request(Request *req);
