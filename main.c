@@ -56,21 +56,23 @@ int main(int argc, char const *argv[])
             exit(EXIT_FAILURE);
         }
         
-        char raw_request[30000] = {0};
+        char raw_request[30000] = {0x0};
         valread = read( new_socket , raw_request, 30000);
-        if (valread > 0)
+        if (valread == 0)
         {
-            printf("%s\n", raw_request );
-
-            char *response = handle_request(raw_request);
-            if (!response)
-                response = error();
-
-            write(new_socket , response , strlen(response));
-            printf("------------------Response sent-------------------\n");
-            printf("%s", response);
-            free(response);
+            close(new_socket);
+            continue;
         }
+
+        printf("%s\n", raw_request );
+        char *response = handle_request(raw_request);
+        if (!response)
+            response = error();
+
+        write(new_socket , response , strlen(response));
+        printf("------------------Response sent-------------------\n");
+        printf("%s", response);
+        free(response);
         close(new_socket);
     }
     return 0;

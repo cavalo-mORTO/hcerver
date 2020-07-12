@@ -1,10 +1,10 @@
 <html>
     <head>
-        <title>ERROR <TMPL_VAR name = "error">!</title>
+        <title>ERROR <TMPL_VAR name = "status">!</title>
     </head>
     <body>
         <TMPL_LOOP name = "errors">
-        <p>ERROR <TMPL_VAR name = "err">: <TMPL_VAR name = "msg"></p>
+            <p>ERROR <TMPL_VAR name = "err">: <TMPL_VAR name = "msg"></p>
         </TMPL_LOOP>
     </body>
 </html>

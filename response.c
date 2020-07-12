@@ -93,6 +93,10 @@ void render_content(Response *resp)
             loop = TMPL_add_varlist(loop, vl);
         }
         resp->TMPL_mainlist = TMPL_add_loop(0, "errors", loop);
+
+        char status[100] = {0x0};
+        sprintf(status, "%d", resp->status);
+        resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
 
     resp->content = TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, NULL, stderr);
