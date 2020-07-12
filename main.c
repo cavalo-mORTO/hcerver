@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <string.h>
 
+#include "libctemplate/ctemplate.h"
 #include "config.h"
 #include "lib.h"
 
@@ -57,17 +58,19 @@ int main(int argc, char const *argv[])
         
         char raw_request[30000] = {0};
         valread = read( new_socket , raw_request, 30000);
-        printf("%s\n", raw_request );
+        if (valread > 0)
+        {
+            printf("%s\n", raw_request );
 
-        char *response = handle_request(raw_request);
-        if (!response)
-            response = error();
+            char *response = handle_request(raw_request);
+            if (!response)
+                response = error();
 
-        write(new_socket , response , strlen(response));
-        printf("------------------Response sent-------------------\n");
-        printf("%s", response);
-        free(response);
-        
+            write(new_socket , response , strlen(response));
+            printf("------------------Response sent-------------------\n");
+            printf("%s", response);
+            free(response);
+        }
         close(new_socket);
     }
     return 0;

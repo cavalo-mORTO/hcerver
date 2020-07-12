@@ -1,8 +1,40 @@
 #define HTTP_OK 200
 #define HTTP_NOTFOUND 404
 #define HTTP_FORBIDDEN 403
+#define HTTP_INTERNAL_SERVER_ERROR 500
 
-typedef enum Method {UNSUPPORTED, GET, HEAD} Method;
+
+#define NO_ROUTE 0
+#define NO_FILE 1
+#define FORBIDDEN 2
+#define SERVER_ERROR 3
+
+static const char err_msg[4][100] = {
+    "Route not found!",
+    "The requested page couldn't be found!",
+    "The requested page is forbidden!",
+    "Internal server error!",
+};
+
+typedef struct Error {
+    unsigned short int error;
+    char *msg;
+    struct Error *next;
+} Error;
+
+typedef struct {
+    size_t content_lenght;
+    unsigned int status;
+    TMPL_varlist *TMPL_mainlist;
+    char *TMPL_file;
+    Error *errors;
+    char *header;
+    char *content;
+    char *repr;
+} Response;
+
+
+typedef enum {UNSUPPORTED, GET, HEAD} Method;
 
 typedef struct Dict {
     char *key;
@@ -10,35 +42,22 @@ typedef struct Dict {
     struct Dict *next;
 } Dict;
 
-typedef struct Response
-{
-    size_t content_lenght;
-    unsigned int status;
-    struct Dict *args;
-    char *file;
-    char *header;
-    char *content;
-    char *repr;
-} Response;
-
-typedef struct Request {
-    enum Method method;
-    struct Dict *queries;
+typedef struct {
+    Method method;
+    Dict *queries;
     char *route;
     char *version;
-    struct Dict *headers;
+    Dict *headers;
     char *body;
 } Request;
 
 // routes.c
-void map_route(Request *req, Response *resp);
+void map_route(const Request *req, Response *resp);
 
 // utils.c
 int max(int a, int b);
 int min(int a, int b);
-int check_file(const char *fname);
-char *read_file(const char *fname);
-char *str_replace(char *input, char *w_old, char *w_new);
+void check_file(Response *resp);
 
 // request.c
 Request *parse_request(char *raw_request);
@@ -47,10 +66,12 @@ Request *parse_request(char *raw_request);
 char *handle_request(char *raw_request);
 void compose_response(Response *resp);
 void render_content(Response *resp);
-void append_arg(Response *resp, char *key, char *value);
 char *error();
+void add_error(Response *resp, unsigned short int err);
+void make_header(Response *resp);
 
 // free.c
 void free_request(Request *req);
 void free_response(Response *resp);
 void free_dict(Dict *d);
+void free_error(Error *e);

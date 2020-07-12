@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
+#include "libctemplate/ctemplate.h"
 #include "lib.h"
 
 Request *parse_request(char *raw) {
