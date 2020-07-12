@@ -10,20 +10,16 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
-#include <pthread.h>
 
 #include "libctemplate/ctemplate.h"
 #include "config.h"
 #include "lib.h"
 
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 void *client_handler(int new_socket)
 {
-    printf("\n\nIN THREAD\n\n");
     int n;
     char raw_request[30000] = {0x0};
-    pthread_mutex_lock(&lock);
     n = read(new_socket , raw_request, 30000);
     if (n < 0)
     {
@@ -43,7 +39,6 @@ void *client_handler(int new_socket)
         close(new_socket);
         free(response);
     }
-    pthread_mutex_unlock(&lock);
     printf("------------------Response sent-------------------\n");
     printf("%s", response);
 
