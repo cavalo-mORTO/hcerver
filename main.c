@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <netinet/in.h>
@@ -15,19 +16,19 @@
 #include "config.h"
 #include "lib.h"
 
-void *client_handler(void *sock)
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+void *client_handler(int new_socket)
 {
     printf("\n\nIN THREAD\n\n");
     int n;
-    int new_socket = *((int *) sock);
-
     char raw_request[30000] = {0x0};
+    pthread_mutex_lock(&lock);
     n = read(new_socket , raw_request, 30000);
     if (n < 0)
     {
         perror("ERROR reading from socket!\n");
         close(new_socket);
-        pthread_exit(NULL);
     }
 
     printf("%s\n", raw_request );
@@ -41,14 +42,13 @@ void *client_handler(void *sock)
         perror("ERROR writing to socket!\n");
         close(new_socket);
         free(response);
-        pthread_exit(NULL);
     }
+    pthread_mutex_unlock(&lock);
     printf("------------------Response sent-------------------\n");
     printf("%s", response);
 
-    close(new_socket);
     free(response);
-    pthread_exit(NULL);
+    close(new_socket);
 }
 
 
@@ -86,7 +86,7 @@ int main(int argc, char const *argv[])
     }
 
     unsigned int i = 0;
-    pthread_t interrupt[MAX_THREADS + 10];
+    pid_t pid[MAX_THREADS];
     while(1)
     {
         printf("\n+++++++ Waiting for new connection ++++++++\n\n");
@@ -96,20 +96,23 @@ int main(int argc, char const *argv[])
             exit(EXIT_FAILURE);
         }
 
-        int re = pthread_create(&interrupt[i++], NULL, client_handler, &new_socket);
-        if(re)
+        int pid_c = 0;
+        if ((pid_c = fork()) == 0)
         {
-            printf("ERROR return code from the pthread_create() is %d\n", re);
+            client_handler(new_socket);
         }
-        if( i >= MAX_THREADS)
+        else
         {
-            i = 0;
-            while(i < MAX_THREADS)
+            pid[i++] = pid_c;
+            if (i >= MAX_THREADS - 1)
             {
-                pthread_join(interrupt[i++], NULL);
-                printf("\n\nJOINING THREAD\n\n");
+                i = 0;
+                while (i < MAX_THREADS)
+                {
+                    waitpid(pid[i++], NULL, 0);
+                }
+                i = 0;
             }
-            i = 0;
         }
     }
     return 0;
