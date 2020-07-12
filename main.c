@@ -9,10 +9,47 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "libctemplate/ctemplate.h"
 #include "config.h"
 #include "lib.h"
+
+void *client_handler(void *sock)
+{
+    printf("\n\nIN THREAD\n\n");
+    int n;
+    int new_socket = *((int *) sock);
+
+    char raw_request[30000] = {0x0};
+    n = read(new_socket , raw_request, 30000);
+    if (n < 0)
+    {
+        perror("ERROR reading from socket!\n");
+        close(new_socket);
+        pthread_exit(NULL);
+    }
+
+    printf("%s\n", raw_request );
+    char *response = handle_request(raw_request);
+    if (!response)
+        response = error();
+
+    n = write(new_socket , response , strlen(response));
+    if (n < 0)
+    {
+        perror("ERROR writing to socket!\n");
+        close(new_socket);
+        free(response);
+        pthread_exit(NULL);
+    }
+    printf("------------------Response sent-------------------\n");
+    printf("%s", response);
+
+    close(new_socket);
+    free(response);
+    pthread_exit(NULL);
+}
 
 
 int main(int argc, char const *argv[])
@@ -47,6 +84,9 @@ int main(int argc, char const *argv[])
         perror("In listen");
         exit(EXIT_FAILURE);
     }
+
+    unsigned int i = 0;
+    pthread_t interrupt[MAX_THREADS + 10];
     while(1)
     {
         printf("\n+++++++ Waiting for new connection ++++++++\n\n");
@@ -55,25 +95,22 @@ int main(int argc, char const *argv[])
             perror("In accept");
             exit(EXIT_FAILURE);
         }
-        
-        char raw_request[30000] = {0x0};
-        valread = read( new_socket , raw_request, 30000);
-        if (valread == 0)
+
+        int re = pthread_create(&interrupt[i++], NULL, client_handler, &new_socket);
+        if(re)
         {
-            close(new_socket);
-            continue;
+            printf("ERROR return code from the pthread_create() is %d\n", re);
         }
-
-        printf("%s\n", raw_request );
-        char *response = handle_request(raw_request);
-        if (!response)
-            response = error();
-
-        write(new_socket , response , strlen(response));
-        printf("------------------Response sent-------------------\n");
-        printf("%s", response);
-        free(response);
-        close(new_socket);
+        if( i >= MAX_THREADS)
+        {
+            i = 0;
+            while(i < MAX_THREADS)
+            {
+                pthread_join(interrupt[i++], NULL);
+                printf("\n\nJOINING THREAD\n\n");
+            }
+            i = 0;
+        }
     }
     return 0;
 }
