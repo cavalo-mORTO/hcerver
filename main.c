@@ -49,7 +49,7 @@ int main(int argc, char const *argv[])
     }
     while(1)
     {
-        printf("\n+++++++ Waiting for new connection ++++++++\n\n");
+        printf("\n+++++++ Waiting for new connection ++++++++\n");
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
         {
             perror("In accept");
@@ -64,14 +64,14 @@ int main(int argc, char const *argv[])
             continue;
         }
 
-        printf("%s\n", raw_request );
+        printf("\n%s\n", raw_request );
         char *response = handle_request(raw_request);
         if (!response)
             response = error();
 
         write(new_socket , response , strlen(response));
-        printf("------------------Response sent-------------------\n");
-        printf("%s", response);
+        printf("\n------------------Response sent-------------------\n");
+        printf("\n%s\n", response);
         free(response);
         close(new_socket);
     }

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -I .
+CFLAGS = -g -I .
 
 run: *.c
 	$(CC) $(CFLAGS) -o run *.c -L ./libctemplate/ -lctemplate
