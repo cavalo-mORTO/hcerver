@@ -16,7 +16,7 @@
 #include "lib.h"
 
 
-void *client_handler(int new_socket)
+void client_handler(int new_socket)
 {
     int n;
     char raw_request[30000] = {0x0};
@@ -24,7 +24,7 @@ void *client_handler(int new_socket)
     if (n < 0)
     {
         perror("ERROR reading from socket!\n");
-        close(new_socket);
+        return;
     }
 
     printf("%s\n", raw_request );
@@ -36,14 +36,14 @@ void *client_handler(int new_socket)
     if (n < 0)
     {
         perror("ERROR writing to socket!\n");
-        close(new_socket);
         free(response);
+        return;
     }
     printf("------------------Response sent-------------------\n");
     printf("%s", response);
 
     free(response);
-    close(new_socket);
+    return;
 }
 
 
@@ -81,33 +81,24 @@ int main(int argc, char const *argv[])
     }
 
     unsigned int i = 0;
-    pid_t pid[MAX_THREADS];
     while(1)
     {
         printf("\n+++++++ Waiting for new connection ++++++++\n\n");
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
+        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0)
         {
             perror("In accept");
             exit(EXIT_FAILURE);
         }
 
-        int pid_c = 0;
-        if ((pid_c = fork()) == 0)
+        if (fork() == 0)
         {
             client_handler(new_socket);
+            close(new_socket);
+            exit(0);
         }
         else
         {
-            pid[i++] = pid_c;
-            if (i >= MAX_THREADS - 1)
-            {
-                i = 0;
-                while (i < MAX_THREADS)
-                {
-                    waitpid(pid[i++], NULL, 0);
-                }
-                i = 0;
-            }
+            close(new_socket);
         }
     }
     return 0;
