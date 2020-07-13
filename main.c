@@ -92,6 +92,7 @@ int main(int argc, char const *argv[])
         pid_t pid;
         if ((pid = fork()) == 0)
         {
+            close(server_fd);
             client_handler(new_socket);
             close(new_socket);
             exit(0);
