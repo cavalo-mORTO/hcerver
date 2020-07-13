@@ -10,21 +10,24 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "libctemplate/ctemplate.h"
 #include "config.h"
 #include "lib.h"
 
+pthread_mutex_t lock;
 
-void client_handler(int new_socket)
+void *client_handler(void *sock)
 {
+    int new_socket = *((int *) sock);
     int n;
     char raw_request[30000] = {0x0};
     n = read(new_socket , raw_request, 30000);
     if (n < 0)
     {
         perror("ERROR reading from socket!\n");
-        return;
+        pthread_exit(0);
     }
 
     printf("%s\n", raw_request );
@@ -37,13 +40,13 @@ void client_handler(int new_socket)
     {
         perror("ERROR writing to socket!\n");
         free(response);
-        return;
+        pthread_exit(0);
     }
     printf("------------------Response sent-------------------\n");
     printf("%s", response);
 
     free(response);
-    return;
+    pthread_exit(0);
 }
 
 
@@ -80,26 +83,24 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
+    if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("Mutex initialization failed.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    pthread_t thrd;
     while(1)
     {
         printf("\n+++++++ Waiting for new connection ++++++++\n\n");
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0)
+        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) <= 0)
         {
             perror("In accept");
             exit(EXIT_FAILURE);
         }
 
-        pid_t pid;
-        if ((pid = fork()) == 0)
-        {
-            client_handler(new_socket);
-            close(new_socket);
-            exit(0);
-        }
-        else
-        {
-            close(new_socket);
-        }
+        pthread_create(&thrd, 0, client_handler, &new_socket);
+        pthread_detach(thrd);
     }
     return 0;
 }
