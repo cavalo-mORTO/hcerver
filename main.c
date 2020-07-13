@@ -69,7 +69,7 @@ int main(int argc, char const *argv[])
     memset(address.sin_zero, '\0', sizeof address.sin_zero);
     
     
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0)
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         perror("In bind");
         exit(EXIT_FAILURE);
@@ -80,7 +80,6 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
-    unsigned int i = 0;
     while(1)
     {
         printf("\n+++++++ Waiting for new connection ++++++++\n\n");
@@ -90,7 +89,8 @@ int main(int argc, char const *argv[])
             exit(EXIT_FAILURE);
         }
 
-        if (fork() == 0)
+        pid_t pid;
+        if ((pid = fork()) == 0)
         {
             client_handler(new_socket);
             close(new_socket);
