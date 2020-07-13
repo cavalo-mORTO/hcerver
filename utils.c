@@ -28,3 +28,42 @@ void check_file(Response *resp)
         resp->status = HTTP_FORBIDDEN;
     }
 }
+
+
+int set_mime_type(Response *resp, char *ext, char *route)
+{
+    if (!ext)
+        return 0;
+
+    free(resp->mime_type);
+
+    char mime[100] = {0x0};
+
+    if (strcmp(&ext[1], "html") == 0)
+        strcpy(mime, "text/html");
+    else if (strcmp(&ext[1], "css") == 0)
+        strcpy(mime, "text/css");
+    else if (strcmp(&ext[1], "js") == 0)
+        strcpy(mime, "text/javascript");
+    else if (strcmp(&ext[1], "csv") == 0)
+        strcpy(mime, "text/csv");
+    else if ( (strcmp(&ext[1], "jpeg")) == 0 || (strcmp(&ext[1], "jpg")) == 0 )
+        strcpy(mime, "image/jpeg");
+    else if (strcmp(&ext[1], "png") == 0)
+        strcpy(mime, "image/png");
+    else if (strcmp(&ext[1], "gif") == 0)
+        strcpy(mime, "image/gif");
+    else if (strcmp(&ext[1], "bmp") == 0)
+        strcpy(mime, "image/bmp");
+    else if (strcmp(&ext[1], "svg") == 0)
+        strcpy(mime, "image/svg+xml");
+    else if (strcmp(&ext[1], "mp4") == 0)
+        strcpy(mime, "video/mp4");
+    else
+        strcpy(mime, "text/plain");
+    
+    resp->mime_type = strdup(mime);
+    resp->TMPL_file = strdup(route);
+
+    return 1;
+}

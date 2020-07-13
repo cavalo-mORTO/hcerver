@@ -13,7 +13,7 @@ void index_page(Response *resp)
 
 void hello_page(Response *resp)
 {
-    resp->TMPL_file = strdup("templates/index.html");
+    resp->TMPL_file = strdup("forbidden.html");
     resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "hello", "Hello world!", 0);
 }
 

@@ -16,6 +16,7 @@ char *handle_request(char *raw_request)
         return NULL;
     }
     resp->status = HTTP_OK;
+    resp->mime_type = strdup("text/html");
     resp->errors = NULL;
 
     Request *req = parse_request(raw_request);
@@ -26,7 +27,10 @@ char *handle_request(char *raw_request)
         return NULL;
     }
 
-    map_route(req, resp);
+    char *ext = strrchr(req->route, '.');
+    if (set_mime_type(resp, ext, &req->route[1]) == 0)
+        map_route(req, resp);
+
     compose_response(resp);
 
     char *response = calloc(1, strlen(resp->repr) + 1);
@@ -64,7 +68,7 @@ void make_header(Response *resp)
     TMPL_varlist *header_list;
     header_list = TMPL_add_var(0,
             "status", status,
-            "content_type", "text/html",
+            "content_type", resp->mime_type,
             "content_len", content_len,
             "date", now_str, 0);
 

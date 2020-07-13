@@ -25,6 +25,7 @@ typedef struct Error {
 typedef struct {
     size_t content_lenght;
     unsigned int status;
+    char *mime_type;
     TMPL_varlist *TMPL_mainlist;
     char *TMPL_file;
     Error *errors;
@@ -58,6 +59,7 @@ void map_route(const Request *req, Response *resp);
 int max(int a, int b);
 int min(int a, int b);
 void check_file(Response *resp);
+int set_mime_type(Response *resp, char *ext, char *route);
 
 // request.c
 Request *parse_request(char *raw_request);

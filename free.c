@@ -32,6 +32,7 @@ void free_request(Request *req) {
 
 void free_response(Response *resp) {
     free_error(resp->errors);
+    free(resp->mime_type);
     free(resp->header);
     free(resp->content);
     TMPL_free_varlist(resp->TMPL_mainlist);
