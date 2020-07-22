@@ -219,6 +219,7 @@ mymalloc(size_t size) {
 static char *
 myrealloc(char *ptr, size_t size) {
     size_t len = strlen(ptr);
+    printf("len = %d\t size = %d\n", len, size);
     char *ret = realloc(ptr, size);
     if (ret == 0) {
         fputs("C Template library: out of memory\n", stderr);

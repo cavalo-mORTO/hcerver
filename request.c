@@ -5,6 +5,7 @@
 #include "libctemplate/ctemplate.h"
 #include "lib.h"
 
+
 Request *parse_request(char *raw) {
     Request *req = NULL;
     req = calloc(1, sizeof(Request));
@@ -14,9 +15,11 @@ Request *parse_request(char *raw) {
 
     // Method
     size_t meth_len = strcspn(raw, " ");
-    if (memcmp(raw, "GET", strlen("GET")) == 0) {
+    if (memcmp(raw, "GET", meth_len) == 0) {
         req->method = GET;
-    } else if (memcmp(raw, "HEAD", strlen("HEAD")) == 0) {
+    } else if (memcmp(raw, "POST", meth_len) == 0) {
+        req->method = POST;
+    } else if (memcmp(raw, "HEAD", meth_len) == 0) {
         req->method = HEAD;
     } else {
         req->method = UNSUPPORTED;
@@ -108,14 +111,14 @@ Request *parse_request(char *raw) {
         }
 
         // name
-        size_t name_len = strcspn(raw, ":");
-        header->key = calloc(1, name_len + 1);
+        size_t key_len = strcspn(raw, ":");
+        header->key = calloc(1, key_len + 1);
         if (!header->key) {
             free_request(req);
             return NULL;
         }
-        memcpy(header->key, raw, name_len);
-        raw += name_len + 1; // move past :
+        memcpy(header->key, raw, key_len);
+        raw += key_len + 1; // move past :
         while (*raw == ' ') {
             raw++;
         }

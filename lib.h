@@ -1,3 +1,4 @@
+#define HTTP_VER "1.1"
 #define HTTP_OK 200
 #define HTTP_NOTFOUND 404
 #define HTTP_FORBIDDEN 403
@@ -25,17 +26,20 @@ typedef struct Error {
 typedef struct {
     size_t content_lenght;
     unsigned int status;
-    char *mime_type;
     TMPL_varlist *TMPL_mainlist;
     char *TMPL_file;
     Error *errors;
     char *header;
     char *content;
-    char *repr;
 } Response;
 
 
-typedef enum {UNSUPPORTED, GET, HEAD} Method;
+typedef enum {
+    GET,
+    POST,
+    HEAD,
+    UNSUPPORTED,
+} Method;
 
 typedef struct Dict {
     char *key;
@@ -59,14 +63,14 @@ void map_route(const Request *req, Response *resp);
 int max(int a, int b);
 int min(int a, int b);
 void check_file(Response *resp);
-int set_mime_type(Response *resp, char *ext, char *route);
+void get_mime_type(Response *resp, char *mime);
+void get_http_metas(char *buffer, char *metas);
 
 // request.c
-Request *parse_request(char *raw_request);
+Request *parse_request(char *raw);
 
 // response.c
 char *handle_request(char *raw_request);
-void compose_response(Response *resp);
 void render_content(Response *resp);
 char *error();
 void add_error(Response *resp, unsigned short int err);

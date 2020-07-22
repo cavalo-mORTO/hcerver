@@ -16,7 +16,6 @@ char *handle_request(char *raw_request)
         return NULL;
     }
     resp->status = HTTP_OK;
-    resp->mime_type = strdup("text/html");
     resp->errors = NULL;
 
     Request *req = parse_request(raw_request);
@@ -27,14 +26,22 @@ char *handle_request(char *raw_request)
         return NULL;
     }
 
-    char *ext = strrchr(req->route, '.');
-    if (set_mime_type(resp, ext, &req->route[1]) == 0)
+    // if what is being requested is a file we'll serve it as is
+    if (strrchr(req->route, '.') != NULL)
+        resp->TMPL_file = strdup(&req->route[1]);
+    else
         map_route(req, resp);
 
-    compose_response(resp);
+    check_file(resp);
 
-    char *response = calloc(1, strlen(resp->repr) + 1);
-    memcpy(response, resp->repr, strlen(resp->repr));
+    render_content(resp);
+    make_header(resp);
+
+    size_t len = resp->content_lenght + strlen(resp->header) + 1;
+
+    // concat response head with the body
+    char *response = calloc(len, sizeof(char));
+    snprintf(response, len, "%s\n%s", resp->header, resp->content);
 
     free_request(req);
     free_response(resp);
@@ -42,38 +49,34 @@ char *handle_request(char *raw_request)
 }
 
 
-void compose_response(Response *resp)
-{
-    check_file(resp);
-
-    render_content(resp);
-    make_header(resp);
-
-    size_t len = resp->content_lenght + strlen(resp->header) + 1;
-    resp->repr = calloc(len, sizeof(char));
-    snprintf(resp->repr, len, "%s\n%s", resp->header, resp->content);
-}
-
 void make_header(Response *resp)
 {
     char status[100] = {0x0};
-    sprintf(status, "%d", resp->status);
+    sprintf(status, "HTTP/%s %d", HTTP_VER, resp->status);
+
+    char mime[200] = {0x0};
+    get_mime_type(resp, mime);
+
+    char content_type[220] = {0x0};
+    sprintf(content_type, "Content-Type: %s", mime);
 
     char content_len[100] = {0x0};
-    sprintf(content_len, "%d", resp->content_lenght);
+    sprintf(content_len, "Content-Length: %d", resp->content_lenght);
+
+    char *server = "Server: The WebServer with Thick Thighs";
+
+    
+    char metas[10000] = {0x0};
+    get_http_metas(resp->content, metas);
 
     time_t now = time(NULL);
-    char *now_str = ctime(&now);
+    char date[100] = {0x0};
+    sprintf(date, "Date: %s", ctime(&now));
 
-    TMPL_varlist *header_list;
-    header_list = TMPL_add_var(0,
-            "status", status,
-            "content_type", resp->mime_type,
-            "content_len", content_len,
-            "date", now_str, 0);
-
-    resp->header = TMPL_write("templates/headers/header.tmpl", 0, 0, header_list, NULL, stderr);
-    TMPL_free_varlist(header_list);
+    size_t head_len = snprintf(NULL, 0, "%s\n%s\n%s\n%s\n%s%s\n", status, content_type, content_len, server, metas, date);
+    
+    resp->header = calloc(head_len + 1, sizeof(char));
+    sprintf(resp->header, "%s\n%s\n%s\n%s\n%s%s\n", status, content_type, content_len, server, metas, date);
 }
 
 
@@ -107,29 +110,6 @@ void render_content(Response *resp)
     resp->content_lenght = strlen(resp->content);
 }
 
-
-char *error()
-{
-    char *HEADER = "HTTP/1.1 %i\nContent-Type: text/html\nContent-Length: %i\nDate: %s\n\n";
-    time_t now = time(NULL);
-    char *now_str = ctime(&now);
-
-    unsigned short int status = 500;
-
-    char *content = "<p>500 Internal Server Error</p>";
-    size_t content_lenght = strlen(content); 
-
-
-    size_t header_size = snprintf(NULL, 0, HEADER, status, content_lenght, now_str) + 1;
-    char *header = malloc(header_size);
-    snprintf(header, header_size, HEADER, status, content_lenght, now_str);
-
-    size_t len = content_lenght + header_size;
-    char *resp = malloc(len + 1);
-    snprintf(resp, len, "%s%s", header, content);
-
-    return resp;
-}
 
 void add_error(Response *resp, unsigned short int err)
 {
