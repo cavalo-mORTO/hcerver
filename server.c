@@ -6,6 +6,18 @@
 #include "libctemplate/ctemplate.h"
 #include "server.h"
 
+/* routes.c */
+void mapRoute(const Request *req, Response *resp);
+
+Request *parseRequest(char *raw);
+void renderContent(Response *resp);
+void makeHeader(Response *resp);
+
+void freeRequest(Request *req);
+void freeResponse(Response *resp);
+void freeDict(Dict_t *d);
+void freeError(Error_t *e);
+
 
 char *handleRequest(char *raw_request)
 {
@@ -26,7 +38,7 @@ char *handleRequest(char *raw_request)
         return NULL;
     }
 
-    // if what is being requested is a file we'll serve it as is
+    /* if what is being requested is a file we'll serve it as is */
     if (strrchr(req->route, '.') != NULL)
         resp->TMPL_file = setPath(req->route);
     else
@@ -37,11 +49,11 @@ char *handleRequest(char *raw_request)
     renderContent(resp);
     makeHeader(resp);
 
-    size_t len = resp->content_lenght + strlen(resp->header) + 1;
+    size_t len = snprintf(NULL, 0, "%s\n%s", resp->header, resp->content);
 
-    // concat response head with the body
-    char *response = calloc(len, sizeof(char));
-    snprintf(response, len, "%s\n%s", resp->header, resp->content);
+    /* concat response head with the body */
+    char *response = calloc(len + 1, sizeof(char));
+    sprintf(response, "%s\n%s", resp->header, resp->content);
 
     freeRequest(req);
     freeResponse(resp);
@@ -69,7 +81,7 @@ void makeHeader(Response *resp)
             HTTP_VER, resp->status,
             mime,
             resp->content_lenght,
-            server_name,
+            SERVER_NAME,
             metas,
             ctime(&now));
     
@@ -84,7 +96,7 @@ void makeHeader(Response *resp)
             HTTP_VER, resp->status,
             mime,
             resp->content_lenght,
-            server_name,
+            SERVER_NAME,
             metas,
             ctime(&now));
 }
@@ -104,14 +116,14 @@ void renderContent(Response *resp)
 
         for (Error_t *e = resp->errors; e; e = e->next)
         {
-            char err[100] = {0x0};
+            char err[12] = {0x0};
             sprintf(err, "%d", e->error);
             vl = TMPL_add_var(0, "err", err, "msg", e->msg, 0);
             loop = TMPL_add_varlist(loop, vl);
         }
         resp->TMPL_mainlist = TMPL_add_loop(0, "errors", loop);
 
-        char status[100] = {0x0};
+        char status[12] = {0x0};
         sprintf(status, "%d", resp->status);
         resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
@@ -133,7 +145,7 @@ void addError(Response *resp, unsigned short int err)
 
     e = calloc(1, sizeof(Error_t));
     e->error = err;
-    e->msg = strdup(err_msg[err]);
+    e->msg = strdup(SERVER_ERROR_MSG[err]);
     e->next = NULL;
 
     Error_t *p = resp->errors;
@@ -151,9 +163,9 @@ void freeDict(Dict_t *d)
 {
     if (d)
     {
+        freeDict(d->next);
         free(d->key);
         free(d->value);
-        freeDict(d->next);
         free(d);
     }
 }
@@ -170,10 +182,10 @@ void freeError(Error_t *e)
 
 void freeRequest(Request *req)
 {
-    free(req->route);
-    free(req->version);
     freeDict(req->queries);
     freeDict(req->headers);
+    free(req->route);
+    free(req->version);
     free(req->body);
     free(req);
 }

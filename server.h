@@ -1,3 +1,6 @@
+#define SERVER_NAME "The WebServer with Thick Thighs"
+
+
 #define HTTP_VER "1.1"
 #define HTTP_OK 200
 #define HTTP_NOTFOUND 404
@@ -5,20 +8,21 @@
 #define HTTP_INTERNAL_SERVER_ERROR 500
 
 
-#define NO_ROUTE 0
-#define NO_FILE 1
-#define FORBIDDEN 2
-#define SERVER_ERROR 3
-
-
 #define TEMPLATE_DIR "public/templates"
 #define JS_DIR "public/static/js"
 #define CSS_DIR "public/static/css"
 
 
-static const char server_name[] = "The WebServer with Thick Thighs";
+typedef enum
+{
+    NO_ROUTE,
+    NO_FILE,
+    FORBIDDEN,
+    INTERNAL_ERROR,
+}
+SERVER_ERROR;
 
-static const char err_msg[4][100] = {
+static char *SERVER_ERROR_MSG[] = {
     "Route not found!",
     "The requested page couldn't be found!",
     "The requested page is forbidden!",
@@ -47,7 +51,8 @@ typedef struct
 Response;
 
 
-typedef enum {
+typedef enum
+{
     GET,
     POST,
     HEAD,
@@ -75,10 +80,7 @@ typedef struct
 Request;
 
 
-// routes.c
-void mapRoute(const Request *req, Response *resp);
-
-// utils.c
+/* utils.c */
 int max(int a, int b);
 int min(int a, int b);
 void readFileOK(Response *resp);
@@ -87,15 +89,6 @@ void getMimeType(Response *resp, char *mime);
 void getHttpMetas(char *buffer, char *metas);
 char *setPath(char *fname);
 
-// server.c
-Request *parseRequest(char *raw);
-
+/* server.c */
 char *handleRequest(char *raw_request);
-void renderContent(Response *resp);
 void addError(Response *resp, unsigned short int err);
-void makeHeader(Response *resp);
-
-void freeRequest(Request *req);
-void freeResponse(Response *resp);
-void freeDict(Dict_t *d);
-void freeError(Error_t *e);
