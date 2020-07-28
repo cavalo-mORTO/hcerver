@@ -13,7 +13,7 @@ void indexPage(Response *resp)
 
 void helloPage(Response *resp)
 {
-    resp->TMPL_file = setPath("index.html");
+    resp->TMPL_file = setPath("index");
     resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "hello", "Hello world!", 0);
 }
 

@@ -145,7 +145,7 @@ void addError(Response *resp, unsigned short int err)
 
     e = calloc(1, sizeof(Error_t));
     e->error = err;
-    e->msg = strdup(SERVER_ERROR_MSG[err]);
+    e->msg = SERVER_ERROR_MSG[err];
     e->next = NULL;
 
     Error_t *p = resp->errors;
@@ -175,7 +175,6 @@ void freeError(Error_t *e)
     if (e)
     {
         freeError(e->next);
-        free(e->msg);
         free(e);
     }
 }

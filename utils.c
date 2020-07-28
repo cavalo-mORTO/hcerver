@@ -192,12 +192,8 @@ void getHttpMetas(char *buffer, char *metas)
 }
 
 
-char *setPath(char *filename)
+char *setPath(char *fname)
 {
-    char *fname = calloc(strlen(filename) + 2, sizeof(char));
-    filename[0] == '/' ?"": strcat(fname, "/");
-    strcat(fname, filename);
-
     char *ext = strrchr(fname, '.');
     if (!ext)
         return strdup(fname);
@@ -213,10 +209,12 @@ char *setPath(char *filename)
     else 
         dir = "";
 
-    char *path = calloc(strlen(fname) + strlen(dir) + 1, sizeof(char));
-    strcat(path, dir);
-    strcat(path, fname);
+    char *fmt = fname[0] == '/' ? "%s%s" : "%s/%s";
 
-    free(fname);
+    size_t len = snprintf(NULL, 0, fmt, dir, fname);
+
+    char *path = calloc(len + 1, sizeof(char));
+    sprintf(path, fmt, dir, fname);
+    
     return path;
 }
