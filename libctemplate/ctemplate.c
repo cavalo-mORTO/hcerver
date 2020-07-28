@@ -134,7 +134,7 @@ struct tagnode {
 struct template {
     const char *filename;  /* name of template file */
     const char *tmplstr;   /* contents of template file */
-    char *out;             /* template output file pointer */
+    char **out;             /* template output file pointer */
     FILE *errout;          /* error output file pointer */
     tagnode *roottag;      /* root of parse tree */
     const TMPL_fmtlist
@@ -216,18 +216,16 @@ mymalloc(size_t size) {
     return ret;
 }
 
-static char *
-myrealloc(char *ptr, size_t size) {
-    size_t len = strlen(ptr);
-    printf("len = %d\t size = %d\n", len, size);
-    char *ret = realloc(ptr, size);
-    if (ret == 0) {
-        fputs("C Template library: out of memory\n", stderr);
-        exit(1);
-    }
-    memset(&ret[len], 0, size - len);
-    return ret;
+void growBuf(char **bufPtr, unsigned int newLength, unsigned int oldLength) {
+    char *tempBufPtr;
+    tempBufPtr = calloc(newLength, sizeof(char));
+
+    memcpy(tempBufPtr, *bufPtr, oldLength);
+
+    free(*bufPtr);
+    *bufPtr = tempBufPtr;
 }
+
 /*
  * newtemplate() creates a new template struct and reads the template
  * file "filename" into memory.  If "tmplstr" is non-null then it is
@@ -236,7 +234,7 @@ myrealloc(char *ptr, size_t size) {
 
 static template *
 newtemplate(const char *filename, const char *tmplstr,
-    const TMPL_fmtlist *fmtlist, char *out, FILE *errout)
+    const TMPL_fmtlist *fmtlist, char **out, FILE *errout)
 {
     template *t;
     FILE *fp;
@@ -1083,11 +1081,11 @@ is_true(const tagnode *iftag, const TMPL_varlist *varlist) {
  */
 
 static void
-write_text(const char *p, int len, template *t) {
+write_text(const char *p, int len, char **out) {
     int i, k;
 
-    int start = strlen(t->out);
-    t->out = myrealloc(t->out, start + len + 1);
+    int start = strlen(*out);
+    growBuf(out, start + len + 1, start);
 
     for (i = 0; i < len; i++) {
 
@@ -1111,7 +1109,7 @@ write_text(const char *p, int len, template *t) {
                 }
             }
         }
-        t->out[start + i] = p[i];
+        (*out)[start + i] = p[i];
     }
 }
 
@@ -1165,7 +1163,7 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
     switch(tag->kind) {
 
     case tag_text:
-        write_text(tag->tag.text.start, tag->tag.text.len, t);
+        write_text(tag->tag.text.start, tag->tag.text.len, t->out);
         break;
 
     case tag_var:
@@ -1177,12 +1175,13 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
 
         /* Use the tag's format function or else just use fputs() */
 
-        t->out = myrealloc(t->out, strlen(t->out) + strlen(value) + 1);
+        size_t oldLen = strlen(*(t->out));
+        growBuf(t->out, oldLen + strlen(value) + 1, oldLen);
         if (tag->tag.var.fmtfunc != 0) {
-            tag->tag.var.fmtfunc(value, t->out);
+            tag->tag.var.fmtfunc(value, *(t->out));
         }
         else {
-            strcat(t->out, value);
+            strcat(*(t->out), value);
         }
         break;
 
@@ -1473,19 +1472,17 @@ TMPL_free_fmtlist(TMPL_fmtlist *fmtlist) {
  * file pointer "errout".
  */
 
-char *
+int
 TMPL_write(const char *filename, const char *tmplstr,
     const TMPL_fmtlist *fmtlist, const TMPL_varlist *varlist,
-    char *out, FILE *errout)
+    char **out, FILE *errout)
 {
     int ret;
     template *t;
 
-    if (out == NULL)
-        out = mymalloc(3);
 
     if ((t = newtemplate(filename, tmplstr, fmtlist, out, errout)) == 0) {
-        return NULL;
+        return -1;
     }
     t->roottag = parselist(t, 0);
     walk(t, t->roottag, varlist);
@@ -1495,12 +1492,9 @@ TMPL_write(const char *filename, const char *tmplstr,
     }
 
 
-    out = mymalloc(strlen(t->out) + 1);
-    memcpy(out, t->out, strlen(t->out));
-    free(t->out);
     freetag(t->roottag);
     free(t);
-    return out;
+    return 0;
 }
 
 /*

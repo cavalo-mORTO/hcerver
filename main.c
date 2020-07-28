@@ -10,7 +10,7 @@
 #include <errno.h>
 
 #include "libctemplate/ctemplate.h"
-#include "lib.h"
+#include "server.h"
 
 #define SERVER_PORT  8080
 
@@ -274,25 +274,19 @@ int main (int argc, char *argv[])
 
           if (len < sizeof(buffer) - 1)
           {
-              printf("  Message has been received in full\n");
-              printf("%s\n\n", request);
-              char *response = handle_request(request);
+              printf("  Request has been received in full\n%s\n\n", request);
+              char *response = handleRequest(request);
 
               /*****************************************************/
               /* Echo the data back to the client                  */
               /*****************************************************/
               rc = send(fds[i].fd, response, strlen(response), 0);
               if (rc < 0)
-              {
                   perror("  send() failed");
-                  free(response);
-                  close_conn = TRUE;
-                  break;
-              }
-              printf("  Response has been sent\n");
-              printf("%s\n\n", response);
-              free(response);
+              else
+                  printf("  Response has been sent\n%s\n\n", response);
 
+              free(response);
               close_conn = TRUE;
               break;
           }

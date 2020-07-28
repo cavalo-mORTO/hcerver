@@ -3,24 +3,24 @@
 #include <stdio.h>
 
 #include "libctemplate/ctemplate.h"
-#include "lib.h"
+#include "server.h"
 
 void index_page(Response *resp)
 {
-    resp->TMPL_file = strdup("templates/index.html");
+    resp->TMPL_file = setPath("index.html");
     resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "hello", "I'm the index page.", 0);
 }
 
 void hello_page(Response *resp)
 {
-    resp->TMPL_file = strdup("forbidden.html");
+    resp->TMPL_file = setPath("forbidden.html");
     resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "hello", "Hello world!", 0);
 }
 
 
 
 
-void map_route(const Request *req, Response *resp)
+void mapRoute(const Request *req, Response *resp)
 {
     if (strcmp(req->route, "/") == 0)
         index_page(resp);
@@ -29,6 +29,6 @@ void map_route(const Request *req, Response *resp)
     else
     {
         resp->status = HTTP_NOTFOUND;
-        add_error(resp, NO_ROUTE);
+        addError(resp, NO_ROUTE);
     }
 }

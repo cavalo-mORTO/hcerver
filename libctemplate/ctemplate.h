@@ -33,9 +33,9 @@ TMPL_fmtlist *TMPL_add_fmt(TMPL_fmtlist *fmtlist,
 
 void TMPL_free_fmtlist(TMPL_fmtlist *fmtlist);
 
-char *TMPL_write(const char *filename, const char *tmplstr,
+int TMPL_write(const char *filename, const char *tmplstr,
     const TMPL_fmtlist *fmtlist, const TMPL_varlist *varlist,
-    char *out, FILE *errout);
+    char **out, FILE *errout);
 
 void TMPL_encode_entity(const char *value, char *out);
 

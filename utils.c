@@ -2,35 +2,80 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "libctemplate/ctemplate.h"
-#include "lib.h"
+#include "server.h"
 
 int max ( int a, int b ) { return a > b ? a : b; }
 int min ( int a, int b ) { return a < b ? a : b; }
 
-void check_file(Response *resp)
+void checkFile(Response *resp, unsigned int permission)
 {
-    const char *fname = resp->TMPL_file;
-    if (!fname)
+    const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
+    struct stat st;
+    mode_t owner, group;
+    uid_t usrID = getuid();
+    gid_t grpID = getgid();
+
+    if (lstat(fname, &st) < 0)
     {
-        add_error(resp, NO_FILE);
+        addError(resp, NO_FILE);
         resp->status = HTTP_NOTFOUND;
+        return;
     }
-    else if (access(fname, F_OK) == -1)
+
+    owner = st.st_mode & S_IRWXU;
+    group = st.st_mode & S_IRWXG;
+    
+    if (usrID != st.st_uid || grpID != st.st_gid)
     {
-        add_error(resp, NO_FILE);
-        resp->status = HTTP_NOTFOUND;
+        addError(resp, FORBIDDEN);
+        resp->status = HTTP_FORBIDDEN;
+        return;
     }
-    else if (access(fname, R_OK) == -1)
+
+    if (!(owner & S_IRUSR) || !(group & S_IRGRP))
     {
-        add_error(resp, FORBIDDEN);
+        addError(resp, FORBIDDEN);
+        resp->status = HTTP_FORBIDDEN;
+    }
+
+    if (permission == 0)
+        return;
+
+    if (!(owner & S_IWUSR) || !(group & S_IWGRP))
+    {
+        addError(resp, FORBIDDEN);
+        resp->status = HTTP_FORBIDDEN;
+    }
+
+    if (permission == 1)
+        return;
+
+    if (!(owner & S_IXUSR) || !(group & S_IXGRP))
+    {
+        addError(resp, FORBIDDEN);
         resp->status = HTTP_FORBIDDEN;
     }
 }
 
+void readFileOK(Response *resp)
+{
+    checkFile(resp, 0);
+}
 
-void get_mime_type(Response *resp, char *mime)
+void writeFileOK(Response *resp)
+{
+    checkFile(resp, 1);
+}
+
+void execFileOK(Response *resp)
+{
+    checkFile(resp, 2);
+}
+
+void getMimeType(Response *resp, char *mime)
 {
     char *ext = strrchr(resp->TMPL_file, '.');
     if (!ext)
@@ -76,7 +121,7 @@ void get_mime_type(Response *resp, char *mime)
 }
 
 
-void get_http_metas(char *buffer, char *metas)
+void getHttpMetas(char *buffer, char *metas)
 {
     if (!strstr(buffer, "<head>"))
         return;
@@ -144,4 +189,34 @@ void get_http_metas(char *buffer, char *metas)
             strcat(metas, buf);
         }
     }
+}
+
+
+char *setPath(char *filename)
+{
+    char *fname = calloc(strlen(filename) + 2, sizeof(char));
+    filename[0] == '/' ?"": strcat(fname, "/");
+    strcat(fname, filename);
+
+    char *ext = strrchr(fname, '.');
+    if (!ext)
+        return strdup(fname);
+
+    ext++;
+    char *dir;
+    if (strcmp(ext, "html") == 0)
+        dir = TEMPLATE_DIR;
+    else if (strcmp(ext, "js") == 0)
+        dir = JS_DIR;
+    else if (strcmp(ext, "css") == 0)
+        dir = CSS_DIR;
+    else 
+        dir = "";
+
+    char *path = calloc(strlen(fname) + strlen(dir) + 1, sizeof(char));
+    strcat(path, dir);
+    strcat(path, fname);
+
+    free(fname);
+    return path;
 }
