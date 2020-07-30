@@ -5,10 +5,14 @@
 #include "libctemplate/ctemplate.h"
 #include "server.h"
 
-void indexPage(Response *resp)
+void indexPage(Response *resp, Request *req)
 {
     resp->TMPL_file = setPath("index.html");
     resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "hello", "I'm the index page.", 0);
+
+    char *a = getRequestArg(req, "name");
+
+    puts(a);
 }
 
 void helloPage(Response *resp)
@@ -20,10 +24,10 @@ void helloPage(Response *resp)
 
 
 
-void mapRoute(const Request *req, Response *resp)
+void mapRoute(Request *req, Response *resp)
 {
     if (strcmp(req->route, "/") == 0)
-        indexPage(resp);
+        indexPage(resp, req);
     else if (strcmp(req->route, "/hello") == 0)
         helloPage(resp);
     else

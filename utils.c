@@ -218,3 +218,20 @@ char *setPath(char *fname)
     
     return path;
 }
+
+
+char *getRequestArg(Request *req, char *argToFind)
+{
+    Dict_t *arg = req->queries;
+    size_t len = strlen(argToFind);
+
+    if (!arg) return NULL;
+
+    for (; ; arg = arg->next)
+    {
+        if (memcmp(arg->key, argToFind, len) == 0)
+            return arg->value;
+    }
+
+    return NULL;
+}

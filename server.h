@@ -92,3 +92,4 @@ char *setPath(char *fname);
 /* server.c */
 char *handleRequest(char *raw_request);
 void addError(Response *resp, unsigned short int err);
+char *getRequestArg(Request *req, char *argToFind);
