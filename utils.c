@@ -223,15 +223,15 @@ char *setPath(char *fname)
 char *getRequestArg(Request *req, char *argToFind)
 {
     Dict_t *arg = req->queries;
-    size_t len = strlen(argToFind);
-
     if (!arg) return NULL;
 
-    for (; ; arg = arg->next)
+    do
     {
-        if (memcmp(arg->key, argToFind, len) == 0)
+        if (strcmp(arg->key, argToFind) == 0)
             return arg->value;
+        arg = arg->next;
     }
+    while (arg != NULL);
 
     return NULL;
 }

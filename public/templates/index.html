@@ -1,6 +1,23 @@
-<TMPL_INCLUDE name="public/templates/header.tmpl">
-  <body>
-      <p>This is an example paragraph. Anything in the <strong>body</strong> tag will appear on the page, just like this <strong>p</strong> tag and its contents.</p>
-      <p><TMPL_VAR name = "hello"></p>
-      <a href="doc.html">C Template Library 1.0 Docs</a>
-<TMPL_INCLUDE name="public/templates/footer.tmpl">
+<TMPL_INCLUDE name=".../header.html">
+<div class="container" >
+	<div class="jumbotron">
+		<h1 class="display-4">Dinosaurs!</h1>
+		<p class="lead">Here you'll find a wiki page on dinosaurs.</p>
+		<hr class="my-4">
+		<p>Start by searching your favorite ones.</p>
+		<form method="GET" action="{{ url_for('dinosaur.index') }}">
+			<div class="form-group row">
+				<div class="col-lg-6 col-md-12">
+					<input type="text" class="form-control" id="name" name="name">
+				</div>
+			</div>
+
+			<div class="form-group row">
+				<div class="col-lg-6 col-md-12">
+					<button type="submit" class="btn btn-primary btn-lg">Learn more</button>
+				</div>
+			</div>
+		</form>
+	</div>
+</div>
+<TMPL_INCLUDE name=".../footer.html">

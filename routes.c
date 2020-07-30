@@ -12,7 +12,12 @@ void indexPage(Response *resp, Request *req)
 
     char *a = getRequestArg(req, "name");
 
-    puts(a);
+    if (a)
+    {
+        printf("a is defined\n");
+        puts(a);
+    }
+
 }
 
 void helloPage(Response *resp)

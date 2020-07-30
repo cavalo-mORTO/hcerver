@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ data['name'] }}{% endblock %}
+
+{% block content %}
+<div class="container">
+	<div class="row">
+		<nav class="w-100" aria-label="breadcrumb">
+			<ol class="breadcrumb">
+				<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+				<li class="breadcrumb-item"><a href="{{ url_for('dinosaur.index') }}">Search</a></li>
+				<li class="breadcrumb-item active" aria-current="page">{{ data['name'] }}</li>
+			</ol>
+		</nav>
+	</div>
+</div>
+
+
+<div class="container white">
+	<div class="row mb-1">
+		<div class="col-lg-12">
+			<h2 class="border-bottom">{{ data['name'] }}</h2>
+		</div>
+	</div>
+
+	<div class="row mb-3 d-flex">
+		<div class="col-lg-9 order-1 order-lg-0">
+			<div class="row">
+				<div class="col-lg-12">
+					{% for p in data.formatted_text %}
+					<p>{{ p }}<p>
+					{% endfor %}
+				</div>
+			</div>
+
+
+
+
+
+			{% if data.get_contents() %}
+
+
+			<!-- start of mobile-only content  -->
+			<div class="row d-lg-none">
+				<div class="col-12">
+					<div id="accordion">
+						{% for section in data.get_contents() %}
+						<div class="card">
+							<div class="card-header" id="{{ 'heading_' + section.title_id }}">
+								<h5 class="mb-0">
+									<button class="btn btn-link collapsed" data-toggle="collapse" data-target="#{{ section.title_id + '_mobile' }}" aria-expanded="true" aria-controls="{{ section.title_id + '_mobile' }}">
+										{{ section.title if section.title }}
+									</button>
+								</h5>
+							</div>
+					
+							<div id="{{ section.title_id + '_mobile' }}" class="collapse" aria-labelledby="{{ 'heading_' + section.title_id }}" data-parent="#accordion">
+								<div class="card-body">
+									{% for p in section.formatted_text %}
+									<p>{{ p }}</p>
+									{% endfor %}
+								</div>
+							</div>
+						</div>
+						{% endfor %}
+					</div>
+				</div>
+			</div>
+			<!-- end of mobile-only content -->
+
+			<!-- start of desktop-only content -->
+			<div class="row d-none d-lg-flex">
+				<div class="col-lg-3" style="height:500px">
+					<div class="list-group overflow-auto h-100" id="list-tab">
+						{% for section in data.get_contents() %}
+						<a class="list-group-item list-group-item-action" href="#{{ section.title_id }}">
+							{{ section.title }}
+						</a>
+						{% endfor %}
+					</div>
+				</div>
+
+				<div class="col-lg-9 pl-1" style="height:500px">
+					<div data-spy="scroll" data-target="#list-tab" data-offset="0" class="scrollspy-example overflow-auto h-100">
+						{% for section in data.get_contents() %}
+						<h4 id="{{ section.title_id }}">
+							{{ section.title }}
+						</h4>
+							{% for p in section.formatted_text %}
+							<p>{{ p }}</p>
+							{% endfor %}
+						{% endfor %}
+					</div>
+				</div>
+			</div>
+			<!-- end of desktop-only content -->
+		
+
+			{% endif %}
+
+		</div>
+
+
+		<div class="col-lg-3 mb-3">
+			<div class="card">
+				<img class="card-img-top" src="{{ data['img'] }}" alt="{{ data['name'] }}">
+  				<div class="card-body">
+					<button class="btn btn-link p-0" type="button" data-toggle="collapse" data-target="#i_shall_collapse" aria-expanded="false" aria-controls="i_shall_collapse">
+	  					<h5 class="card-title">{{ data['name'] }}</h5>
+					</button>
+				</div>
+				<ul id="i_shall_collapse" class="collapse list-group list-group-flush">
+					{% for parent in data.get_parents() %}
+					<li class="list-group-item">
+						<a href="{{ url_for('dinosaur.show', id=parent.id) }}" class="card-link">{{ parent.name }}</a>
+					</li>
+    					{% endfor %}
+				</ul>
+			</div>
+		</div>
+	</div>
+
+</div>
+{% endblock %}
