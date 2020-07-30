@@ -216,7 +216,8 @@ mymalloc(size_t size) {
     return ret;
 }
 
-void growBuf(char **bufPtr, unsigned int newLength, unsigned int oldLength) {
+static void
+growBuf(char **bufPtr, unsigned int newLength, unsigned int oldLength) {
     char *tempBufPtr;
     tempBufPtr = calloc(newLength, sizeof(char));
 
