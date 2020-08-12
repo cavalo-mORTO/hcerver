@@ -1,4 +1,4 @@
-#define SERVER_NAME "The WebServer with Thick Thighs"
+#define SERVER_NAME "The WebServer with Thick Thighs (づ｡◕‿‿◕｡)づ"
 
 
 #define HTTP_VER "1.1"
@@ -77,11 +77,12 @@ Dict_t;
 typedef struct
 {
     Method method;
-    Dict_t *queries;
+    Dict_t *queries; /* key-value pairs of url address */
     char *route;
     char *version;
     Dict_t *headers;
     char *body;
+    Dict_t *posts; /* only is filled is request method is POST */
 }
 Request;
 
@@ -91,13 +92,17 @@ int max(int a, int b);
 int min(int a, int b);
 void readFileOK(Response *resp);
 void writeFileOK(Response *resp);
-void getMimeType(Response *resp, char *mime);
-void getHttpMetas(char *buffer, char *metas);
-char *setPath(char *fname);
 
 /* server.c */
-char *handleRequest(char *raw_request);
-void addError(Response *resp, unsigned short int err);
-char *getRequestArg(Request *req, char *argToFind);
+void renderContent(Response *resp);
+void addError(Response *resp, unsigned char err);
+void freeRequest(Request *req);
+void freeResponse(Response *resp);
+Request *parseRequest(char *raw);
+
+
+char *getRequestUrlArg(Request *req, char *argToFind);
+char *getRequestPostArg(Request *req, char *argToFind);
 int regexMatch(char *regexStr, char *matchStr);
 char *getRouteParam(Request *req, unsigned int pos);
+char *setPath(char *fname);

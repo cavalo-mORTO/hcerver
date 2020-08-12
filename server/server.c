@@ -3,72 +3,43 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "libctemplate/ctemplate.h"
+#include <unistd.h>
+#include <sys/stat.h>
+#include <regex.h>
+
+
+#include "../libctemplate/ctemplate.h"
 #include "server.h"
 
-/* routes.c */
-void mapRoute(const Request *req, Response *resp);
 
-Request *parseRequest(char *raw);
-void renderContent(Response *resp);
-void makeHeader(Response *resp);
-
-void freeRequest(Request *req);
-void freeResponse(Response *resp);
-void freeDict(Dict_t *d);
-void freeError(Error_t *e);
+int max ( int a, int b ) { return a > b ? a : b; }
+int min ( int a, int b ) { return a < b ? a : b; }
 
 
-char *handleRequest(char *raw_request)
+static char *getMimeType(char *fname)
 {
-    Response *resp = calloc(1, sizeof(Response));
-    if (!resp) 
-    {
-        freeResponse(resp);
-        return NULL;
-    }
-    resp->status = HTTP_OK;
-    resp->errors = NULL;
+    char *ext = strrchr(fname, '.');
+    if (!ext) return "text/plain";
 
-    Request *req = parseRequest(raw_request);
-    if (!req) 
-    {
-        freeResponse(resp);
-        freeRequest(req);
-        return NULL;
-    }
+    ext++;
+    if (strcmp(ext, "html"    ) == 0) return "text/html";
+    else if (strcmp(ext, "css") == 0) return "text/css";
+    else if (strcmp(ext, "js" ) == 0) return "text/javascript";
+    else if (strcmp(ext, "csv") == 0) return "text/csv";
+    else if ( (strcmp(ext, "jpeg")) == 0 || (strcmp(ext, "jpg")) == 0 ) return "image/jpeg";
+    else if (strcmp(ext, "png") == 0) return "image/png";
+    else if (strcmp(ext, "gif") == 0) return "image/gif";
+    else if (strcmp(ext, "bmp") == 0) return "image/bmp";
+    else if (strcmp(ext, "svg") == 0) return "image/svg+xml";
+    else if (strcmp(ext, "mp4") == 0) return "video/mp4";
 
-    /* if what is being requested is a file we'll serve it as is */
-    if (strrchr(req->route, '.') != NULL)
-        resp->TMPL_file = setPath(req->route);
-    else
-        mapRoute(req, resp);
-
-    readFileOK(resp);
-
-    renderContent(resp);
-    makeHeader(resp);
-
-    size_t len = snprintf(NULL, 0, "%s\n%s", resp->header, resp->content);
-
-    /* concat response head with the body */
-    char *response = calloc(len + 1, sizeof(char));
-    sprintf(response, "%s\n%s", resp->header, resp->content);
-
-    freeRequest(req);
-    freeResponse(resp);
-    return response;
+    return "text/plain";
 }
 
 
-void makeHeader(Response *resp)
+static void makeHeader(Response *resp)
 {
-    char mime[200] = {0x0};
-    getMimeType(resp, mime);
-    
-    char metas[10000] = {0x0};
-    getHttpMetas(resp->content, metas);
-
+    char *mime = getMimeType(resp->TMPL_file);
     time_t now = time(NULL);
 
     size_t head_len = snprintf(NULL, 0,
@@ -76,13 +47,11 @@ void makeHeader(Response *resp)
             "Content-Type: %s\n"
             "Content-Length: %ld\n"
             "Server: %s\n"
-            "%s"
             "Date: %s\n",
             HTTP_VER, resp->status,
             mime,
             resp->content_lenght,
             SERVER_NAME,
-            metas,
             ctime(&now));
     
     resp->header = calloc(head_len + 1, sizeof(char));
@@ -91,19 +60,19 @@ void makeHeader(Response *resp)
             "Content-Type: %s\n"
             "Content-Length: %ld\n"
             "Server: %s\n"
-            "%s"
             "Date: %s\n",
             HTTP_VER, resp->status,
             mime,
             resp->content_lenght,
             SERVER_NAME,
-            metas,
             ctime(&now));
 }
 
 
 void renderContent(Response *resp)
 {
+    readFileOK(resp);
+
     TMPL_varlist *vl;
     TMPL_loop *loop;
 
@@ -131,10 +100,12 @@ void renderContent(Response *resp)
     resp->content = calloc(10, sizeof(char));
     TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content, stderr);
     resp->content_lenght = strlen(resp->content);
+
+    makeHeader(resp);
 }
 
 
-void addError(Response *resp, unsigned short int err)
+void addError(Response *resp, unsigned char err)
 {
     Error_t *e;
     for (e = resp->errors; e; e = e->next)
@@ -159,7 +130,7 @@ void addError(Response *resp, unsigned short int err)
 }
 
 
-void freeDict(Dict_t *d)
+static void freeDict(Dict_t *d)
 {
     if (d)
     {
@@ -170,7 +141,7 @@ void freeDict(Dict_t *d)
     }
 }
 
-void freeError(Error_t *e)
+static void freeError(Error_t *e)
 {
     if (e)
     {
@@ -183,6 +154,7 @@ void freeRequest(Request *req)
 {
     freeDict(req->queries);
     freeDict(req->headers);
+    freeDict(req->posts);
     free(req->route);
     free(req->version);
     free(req->body);
@@ -208,15 +180,14 @@ Request *parseRequest(char *raw)
 
     // Method
     size_t meth_len = strcspn(raw, " ");
-    if (memcmp(raw, "GET", meth_len) == 0) {
+    if (memcmp(raw, "GET", meth_len) == 0)
         req->method = GET;
-    } else if (memcmp(raw, "POST", meth_len) == 0) {
+    else if (memcmp(raw, "POST", meth_len) == 0)
         req->method = POST;
-    } else if (memcmp(raw, "HEAD", meth_len) == 0) {
+    else if (memcmp(raw, "HEAD", meth_len) == 0)
         req->method = HEAD;
-    } else {
+    else
         req->method = UNSUPPORTED;
-    }
     raw += meth_len + 1; // move past <SP>
 
     // Request-URI
@@ -295,7 +266,8 @@ Request *parseRequest(char *raw)
     raw += ver_len + 2; // move past <CR><LF>
 
     Dict_t *header = NULL, *last = NULL;
-    while (raw[0]!='\r' || raw[1]!='\n') {
+    while (raw[0]!='\r' || raw[1]!='\n')
+    {
         last = header;
         header = calloc(1, sizeof(Dict_t));
         if (!header) {
@@ -312,9 +284,7 @@ Request *parseRequest(char *raw)
         }
         memcpy(header->key, raw, key_len);
         raw += key_len + 1; // move past :
-        while (*raw == ' ') {
-            raw++;
-        }
+        while (*raw == ' ') raw++;
 
         // value
         size_t value_len = strcspn(raw, "\r\n");
@@ -340,5 +310,190 @@ Request *parseRequest(char *raw)
     }
     memcpy(req->body, raw, body_len);
 
+    if (req->method == POST)
+    {
+        Dict_t *post = NULL, *lastPost = NULL;
+
+        char *token;
+        while ((token = strsep(&raw, "&")) != NULL)
+        {
+            lastPost = post;
+            post = calloc(1, sizeof(Dict_t));
+            if (!post)
+            {
+                freeRequest(req);
+                return NULL;
+            };
+
+            char *string, *tofree;
+            string = tofree = strdup(token);
+
+            char *key = strsep(&string, "=");
+            char *val = string;
+
+            post->key = strdup(key);
+            post->value = strdup(val);
+            post->next = lastPost;
+
+            free(tofree);
+        }
+        req->posts = post;
+    }
+
     return req;
+}
+
+
+
+static void checkFile(Response *resp, unsigned int permission)
+{
+    const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
+    struct stat st;
+    mode_t owner, group;
+    uid_t usrID = getuid();
+    gid_t grpID = getgid();
+
+    if (lstat(fname, &st) < 0)
+    {
+        addError(resp, NO_FILE);
+        resp->status = HTTP_NOTFOUND;
+        return;
+    }
+
+    owner = st.st_mode & S_IRWXU;
+    group = st.st_mode & S_IRWXG;
+    
+    if (usrID != st.st_uid || grpID != st.st_gid)
+    {
+        addError(resp, FORBIDDEN);
+        resp->status = HTTP_FORBIDDEN;
+        return;
+    }
+
+    if (!(owner & S_IRUSR) || !(group & S_IRGRP))
+    {
+        addError(resp, FORBIDDEN);
+        resp->status = HTTP_FORBIDDEN;
+    }
+
+    if (permission == 0) return;
+
+    if (!(owner & S_IWUSR) || !(group & S_IWGRP))
+    {
+        addError(resp, FORBIDDEN);
+        resp->status = HTTP_FORBIDDEN;
+    }
+
+    if (permission == 1) return;
+
+    if (!(owner & S_IXUSR) || !(group & S_IXGRP))
+    {
+        addError(resp, FORBIDDEN);
+        resp->status = HTTP_FORBIDDEN;
+    }
+}
+
+void readFileOK(Response *resp)
+{
+    checkFile(resp, 0);
+}
+
+void writeFileOK(Response *resp)
+{
+    checkFile(resp, 1);
+}
+
+void execFileOK(Response *resp)
+{
+    checkFile(resp, 2);
+}
+
+
+
+
+char *setPath(char *fname)
+{
+    char *ext = strrchr(fname, '.');
+    if (!ext) return strdup(fname);
+
+    ext++;
+    char *dir;
+    if (strcmp(ext, "html") == 0)
+        dir = TEMPLATE_DIR;
+    else if (strcmp(ext, "js") == 0)
+        dir = JS_DIR;
+    else if (strcmp(ext, "css") == 0)
+        dir = CSS_DIR;
+    else 
+        dir = "";
+
+    char *fmt = fname[0] == '/' ? "%s%s" : "%s/%s";
+
+    size_t len = snprintf(NULL, 0, fmt, dir, fname);
+
+    char *path = calloc(len + 1, sizeof(char));
+    sprintf(path, fmt, dir, fname);
+    
+    return path;
+}
+
+
+static char *getRequestArg(Dict_t *arg, char *argToFind)
+{
+    if (!arg) return NULL;
+
+    do
+    {
+        if (strcmp(arg->key, argToFind) == 0) return arg->value;
+        arg = arg->next;
+    }
+    while (arg != NULL);
+
+    return NULL;
+}
+
+char *getRequestUrlArg(Request *req, char *argToFind)
+{
+    return getRequestArg(req->queries, argToFind);
+}
+
+
+char *getRequestPostArg(Request *req, char *argToFind)
+{
+    return getRequestArg(req->posts, argToFind);
+}
+
+
+int regexMatch(char *regexStr, char *matchStr)
+{
+    regex_t regex;
+    int rc;
+
+    rc = regcomp(&regex, regexStr, 0);
+    if (rc != 0) return 1;
+
+    rc = regexec(&regex, matchStr, 0, NULL, 0);
+    regfree(&regex);
+
+    if (rc == 0) return 0;
+
+    return 1;
+}
+
+
+char *getRouteParam(Request *req, unsigned int pos)
+{
+    char *token, *string, *tofree;
+    int i = 0;
+
+    tofree = string = strdup(req->route);
+    while ((token = strsep(&string, "/")) != NULL)
+    {
+        if (i > pos) break;
+        i++;
+    }
+    char *toReturn = strdup(token);
+
+    free(tofree);
+    return toReturn;
 }

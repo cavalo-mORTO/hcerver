@@ -1,6 +1,21 @@
 <TMPL_INCLUDE name="public/templates/header.tmpl">
+
   <body>
+      <TMPL_IF name="name">
+      <h2>Hello, <TMPL_VAR name="name">!</h2>
+      </TMPL_IF>
+
+      <form action="/" method="post">
+          <label for="name">Type your name:</label><br>
+          <input type="text" id="name" name="name"><br>
+          <label for="age">Type your age:</label><br>
+          <input type="number" id="age" name="age"><br>
+          <input type="submit" value="Submit">
+      </form>
+
       <p>This is an example paragraph. Anything in the <strong>body</strong> tag will appear on the page, just like this <strong>p</strong> tag and its contents.</p>
       <p><TMPL_VAR name = "hello"></p>
       <a href="doc.html">C Template Library 1.0 Docs</a>
+
+
 <TMPL_INCLUDE name="public/templates/footer.tmpl">

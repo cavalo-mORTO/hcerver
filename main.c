@@ -10,7 +10,8 @@
 #include <errno.h>
 
 #include "libctemplate/ctemplate.h"
-#include "server.h"
+#include "server/server.h"
+#include "app.h"
 
 #define SERVER_PORT  8080
 
