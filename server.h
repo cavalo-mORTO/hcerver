@@ -5,7 +5,11 @@
 #define HTTP_OK 200
 #define HTTP_NOTFOUND 404
 #define HTTP_FORBIDDEN 403
+#define HTTP_METHOD_NOT_ALLOWED 405
+#define HTTP_TIMEOUT 408
 #define HTTP_INTERNAL_SERVER_ERROR 500
+#define HTTP_NOT_IMPLEMENTED 501
+#define HTTP_SERVICE_UNAVAILABLE 503
 
 
 #define TEMPLATE_DIR "public/templates"
@@ -19,21 +23,23 @@ typedef enum
     NO_FILE,
     FORBIDDEN,
     INTERNAL_ERROR,
+    METHOD_NOT_ALLOWED,
 }
 SERVER_ERROR;
 
-static char *SERVER_ERROR_MSG[] = {
+static const char SERVER_ERROR_MSG[][128] = {
     "Route not found!",
     "The requested page couldn't be found!",
     "The requested page is forbidden!",
     "Internal server error!",
+    "Method not allowed!",
 };
 
 
 typedef struct Error
 {
-    unsigned short int error;
-    char *msg;
+    unsigned char error;
+    const char *msg;
     struct Error *next;
 }
 Error_t;
@@ -93,3 +99,5 @@ char *setPath(char *fname);
 char *handleRequest(char *raw_request);
 void addError(Response *resp, unsigned short int err);
 char *getRequestArg(Request *req, char *argToFind);
+int regexMatch(char *regexStr, char *matchStr);
+char *getRouteParam(Request *req, unsigned int pos);
