@@ -1,15 +1,11 @@
-{% extends 'base.html' %}
-
-{% block title %}{{ data['name'] }}{% endblock %}
-
-{% block content %}
+<TMPL_INCLUDE name="public/templates/header.html">
 <div class="container">
 	<div class="row">
 		<nav class="w-100" aria-label="breadcrumb">
 			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-				<li class="breadcrumb-item"><a href="{{ url_for('dinosaur.index') }}">Search</a></li>
-				<li class="breadcrumb-item active" aria-current="page">{{ data['name'] }}</li>
+				<li class="breadcrumb-item"><a href="/">Home</a></li>
+				<li class="breadcrumb-item"><a href="/dinosaur">Search</a></li>
+                <li class="breadcrumb-item active" aria-current="page"><TMPL_VAR name="name"></li>
 			</ol>
 		</nav>
 	</div>
@@ -19,7 +15,7 @@
 <div class="container white">
 	<div class="row mb-1">
 		<div class="col-lg-12">
-			<h2 class="border-bottom">{{ data['name'] }}</h2>
+			<h2 class="border-bottom"><TMPL_VAR name="name"></h2>
 		</div>
 	</div>
 
@@ -27,92 +23,85 @@
 		<div class="col-lg-9 order-1 order-lg-0">
 			<div class="row">
 				<div class="col-lg-12">
-					{% for p in data.formatted_text %}
-					<p>{{ p }}<p>
-					{% endfor %}
+					<p>
+                        <TMPL_VAR name="desc">
+                    </p>
 				</div>
 			</div>
 
+            <TMPL_IF name="sections">
 
-
-
-
-			{% if data.get_contents() %}
-
-
-			<!-- start of mobile-only content  -->
+            <!-- start of mobile-only content  -->
 			<div class="row d-lg-none">
 				<div class="col-12">
 					<div id="accordion">
-						{% for section in data.get_contents() %}
+                        <TMPL_LOOP name="sections">
 						<div class="card">
-							<div class="card-header" id="{{ 'heading_' + section.title_id }}">
+							<div class="card-header" id="heading_<TMPL_VAR name="sectTitle">">
 								<h5 class="mb-0">
-									<button class="btn btn-link collapsed" data-toggle="collapse" data-target="#{{ section.title_id + '_mobile' }}" aria-expanded="true" aria-controls="{{ section.title_id + '_mobile' }}">
-										{{ section.title if section.title }}
+									<button class="btn btn-link collapsed" data-toggle="collapse" data-target="#<TMPL_VAR name="sectTitle">_mobile" aria-expanded="true" aria-controls="<TMPL_VAR name="sectTitle">_mobile">
+                                        <TMPL_VAR name="sectTitle">
 									</button>
 								</h5>
 							</div>
 					
-							<div id="{{ section.title_id + '_mobile' }}" class="collapse" aria-labelledby="{{ 'heading_' + section.title_id }}" data-parent="#accordion">
+							<div id="<TMPL_VAR name="sectTitle">_mobile" class="collapse" aria-labelledby="heading_<TMPL_VAR name="sectTitle">" data-parent="#accordion">
 								<div class="card-body">
-									{% for p in section.formatted_text %}
-									<p>{{ p }}</p>
-									{% endfor %}
+                                    <p><TMPL_VAR name="sectText"></p>
 								</div>
 							</div>
 						</div>
-						{% endfor %}
+                        </TMPL_LOOP>
 					</div>
 				</div>
 			</div>
 			<!-- end of mobile-only content -->
 
+
+
+
+
 			<!-- start of desktop-only content -->
 			<div class="row d-none d-lg-flex">
 				<div class="col-lg-3" style="height:500px">
 					<div class="list-group overflow-auto h-100" id="list-tab">
-						{% for section in data.get_contents() %}
-						<a class="list-group-item list-group-item-action" href="#{{ section.title_id }}">
-							{{ section.title }}
+                        <TMPL_LOOP name="sections">
+						<a class="list-group-item list-group-item-action" href="#<TMPL_VAR name="sectId">">
+                            <TMPL_VAR name="sectTitle">
 						</a>
-						{% endfor %}
+                        </TMPL_LOOP>
 					</div>
 				</div>
 
 				<div class="col-lg-9 pl-1" style="height:500px">
 					<div data-spy="scroll" data-target="#list-tab" data-offset="0" class="scrollspy-example overflow-auto h-100">
-						{% for section in data.get_contents() %}
-						<h4 id="{{ section.title_id }}">
-							{{ section.title }}
+                        <TMPL_LOOP name="sections">
+						<h4 id="<TMPL_VAR name="sectId">">
+                            <TMPL_VAR name="sectTitle">
 						</h4>
-							{% for p in section.formatted_text %}
-							<p>{{ p }}</p>
-							{% endfor %}
-						{% endfor %}
+							<p><TMPL_VAR name="sectText"></p>
+                        </TMPL_LOOP>
 					</div>
 				</div>
 			</div>
 			<!-- end of desktop-only content -->
-		
 
-			{% endif %}
-
+            </TMPL_IF>
 		</div>
 
 
 		<div class="col-lg-3 mb-3">
 			<div class="card">
-				<img class="card-img-top" src="{{ data['img'] }}" alt="{{ data['name'] }}">
+				<img class="card-img-top" src="<TMPL_VAR name="img">" alt="<TMPL_VAR name="name">">
   				<div class="card-body">
 					<button class="btn btn-link p-0" type="button" data-toggle="collapse" data-target="#i_shall_collapse" aria-expanded="false" aria-controls="i_shall_collapse">
-	  					<h5 class="card-title">{{ data['name'] }}</h5>
+	  					<h5 class="card-title"><TMPL_VAR name="name"></h5>
 					</button>
 				</div>
 				<ul id="i_shall_collapse" class="collapse list-group list-group-flush">
 					{% for parent in data.get_parents() %}
 					<li class="list-group-item">
-						<a href="{{ url_for('dinosaur.show', id=parent.id) }}" class="card-link">{{ parent.name }}</a>
+						<a href="" class="card-link">{{ parent.name }}</a>
 					</li>
     					{% endfor %}
 				</ul>
@@ -121,4 +110,4 @@
 	</div>
 
 </div>
-{% endblock %}
+<TMPL_INCLUDE name="public/templates/footer.html">

@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <regex.h>
+
 
 #include "libctemplate/ctemplate.h"
 #include "server.h"
@@ -148,7 +150,7 @@ void getHttpMetas(char *buffer, char *metas)
         if (strcmp(tag_name, "meta") != 0)
             continue;
 
-        char key[512] = {0x0};
+        char key[128] = {0x0};
         char val[512] = {0x0};
 
         int i = tag_len + 1;
@@ -234,4 +236,40 @@ char *getRequestArg(Request *req, char *argToFind)
     while (arg != NULL);
 
     return NULL;
+}
+
+
+int regexMatch(char *regexStr, char *matchStr)
+{
+    regex_t regex;
+    int rc;
+
+    rc = regcomp(&regex, regexStr, 0);
+    if (rc != 0) return 1;
+
+    rc = regexec(&regex, matchStr, 0, NULL, 0);
+    regfree(&regex);
+
+    if (rc == 0) return 0;
+
+    return 1;
+}
+
+
+
+char *getRouteParam(Request *req, unsigned int pos)
+{
+    char *token, *string, *tofree;
+    int i = 0;
+
+    tofree = string = strdup(req->route);
+    while ((token = strsep(&string, "/")) != NULL)
+    {
+        if (i > pos) break;
+        i++;
+    }
+    char *toReturn = strdup(token);
+
+    free(tofree);
+    return toReturn;
 }

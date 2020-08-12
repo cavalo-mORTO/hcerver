@@ -74,7 +74,7 @@ void makeHeader(Response *resp)
     size_t head_len = snprintf(NULL, 0,
             "HTTP/%s %d\n"
             "Content-Type: %s\n"
-            "Content-Length: %d\n"
+            "Content-Length: %ld\n"
             "Server: %s\n"
             "%s"
             "Date: %s\n",
@@ -89,7 +89,7 @@ void makeHeader(Response *resp)
     sprintf(resp->header,
             "HTTP/%s %d\n"
             "Content-Type: %s\n"
-            "Content-Length: %d\n"
+            "Content-Length: %ld\n"
             "Server: %s\n"
             "%s"
             "Date: %s\n",
@@ -204,9 +204,7 @@ Request *parseRequest(char *raw)
 {
     Request *req = NULL;
     req = calloc(1, sizeof(Request));
-    if (!req) {
-        return NULL;
-    }
+    if (!req) return NULL;
 
     // Method
     size_t meth_len = strcspn(raw, " ");
