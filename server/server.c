@@ -97,7 +97,7 @@ void renderContent(Response *resp)
         resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
 
-    resp->content = calloc(10, sizeof(char));
+    resp->content = calloc(1000, sizeof(char));
     TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content, stderr);
     resp->content_lenght = strlen(resp->content);
 
@@ -480,7 +480,7 @@ char *getRouteParam(Request *req, unsigned int pos)
     return toReturn;
 }
 
-int regexMatch(char *regexStr, char *matchStr)
+static int regexMatch(char *matchStr, char *regexStr)
 {
     regex_t regex;
     int rc;
@@ -504,5 +504,5 @@ int routeIs(Request *req, char *route)
 
 int routeIsRegEx(Request *req, char *regex)
 {
-    return regexMatch(req->route, regex);
+    return !regexMatch(req->route, regex);
 }
