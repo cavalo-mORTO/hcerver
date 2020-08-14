@@ -106,3 +106,5 @@ char *getRequestPostArg(Request *req, char *argToFind);
 int regexMatch(char *regexStr, char *matchStr);
 char *getRouteParam(Request *req, unsigned int pos);
 char *setPath(char *fname);
+int routeIs(Request *req, char *route);
+int routeIsRegEx(Request *req, char *regex);

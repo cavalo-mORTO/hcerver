@@ -410,7 +410,6 @@ void execFileOK(Response *resp)
 
 
 
-
 char *setPath(char *fname)
 {
     char *ext = strrchr(fname, '.');
@@ -464,6 +463,23 @@ char *getRequestPostArg(Request *req, char *argToFind)
 }
 
 
+char *getRouteParam(Request *req, unsigned int pos)
+{
+    char *token, *string, *tofree;
+    int i = 0;
+
+    tofree = string = strdup(req->route);
+    while ((token = strsep(&string, "/")) != NULL)
+    {
+        if (i > pos) break;
+        i++;
+    }
+    char *toReturn = strdup(token);
+
+    free(tofree);
+    return toReturn;
+}
+
 int regexMatch(char *regexStr, char *matchStr)
 {
     regex_t regex;
@@ -481,19 +497,12 @@ int regexMatch(char *regexStr, char *matchStr)
 }
 
 
-char *getRouteParam(Request *req, unsigned int pos)
+int routeIs(Request *req, char *route)
 {
-    char *token, *string, *tofree;
-    int i = 0;
+    return !strcmp(req->route, route);
+}
 
-    tofree = string = strdup(req->route);
-    while ((token = strsep(&string, "/")) != NULL)
-    {
-        if (i > pos) break;
-        i++;
-    }
-    char *toReturn = strdup(token);
-
-    free(tofree);
-    return toReturn;
+int routeIsRegEx(Request *req, char *regex)
+{
+    return regexMatch(req->route, regex);
 }

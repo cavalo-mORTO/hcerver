@@ -10,9 +10,11 @@
 
 void mapRoute(Request *req, Response *resp)
 {
-    if (strcmp(req->route, "/") == 0)
+    if ( routeIs(req, "/") )
         indexPage(resp, req);
-    else if (strcmp(req->route, "/hello") == 0)
+    else if ( routeIs(req, "/hello") )
+        helloPage(resp);
+    else if ( routeIsRegEx(req, "/hello/[0-9]*$") )
         helloPage(resp);
     else
     {
@@ -59,6 +61,3 @@ char *handleRequest(char *raw_request)
     freeResponse(resp);
     return response;
 }
-
-
-
