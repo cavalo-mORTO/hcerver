@@ -10,14 +10,21 @@
 
 void mapRoute(Request *req, Response *resp)
 {
-    if (!strcmp(req->route, "/"))
+    if (routeIs(req, "/"))
         indexPage(resp, req);
-    else if (strcmp(req->route, "/hello") == 0)
+
+    else if (routeIs(req, "/hello"))
         helloPage(resp);
-    else if (strcmp(req->route, "/dinosaur") == 0)
+
+    else if (routeIsRegEx(req, "/hello/[0-9]*$"))
+        helloPage(resp);
+
+    else if (routeIs(req, "/dinosaur"))
         dinosaurIndexPage(resp, req);
-    else if (regexMatch("/dinosaur/show/[0-9]*$", req->route) == 0)
+
+    else if (routeIsRegEx(req, "/dinosaur/show/[0-9]*$"))
         dinosaurShowPage(resp, req);
+
     else
     {
         resp->status = HTTP_NOTFOUND;
@@ -63,6 +70,3 @@ char *handleRequest(char *raw_request)
     freeResponse(resp);
     return response;
 }
-
-
-

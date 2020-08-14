@@ -1085,8 +1085,9 @@ static void
 write_text(const char *p, int len, char **out) {
     int i, k;
 
-    int start = strlen(*out);
-    growBuf(out, start + len + 1, start);
+    size_t oldLen = strlen(*out);
+    size_t newLen = oldLen + len + 1;
+    growBuf(out, newLen, oldLen);
 
     for (i = 0; i < len; i++) {
 
@@ -1110,7 +1111,7 @@ write_text(const char *p, int len, char **out) {
                 }
             }
         }
-        (*out)[start + i] = p[i];
+        (*out)[oldLen + i] = p[i];
     }
 }
 
@@ -1177,7 +1178,9 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
         /* Use the tag's format function or else just use fputs() */
 
         size_t oldLen = strlen(*(t->out));
-        growBuf(t->out, oldLen + strlen(value) + 1, oldLen);
+        size_t newLen = oldLen + strlen(value) + 1;
+        growBuf(t->out, newLen, oldLen);
+
         if (tag->tag.var.fmtfunc != 0) {
             tag->tag.var.fmtfunc(value, *(t->out));
         }
