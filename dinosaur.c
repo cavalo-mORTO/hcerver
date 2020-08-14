@@ -4,7 +4,8 @@
 #include <sqlite3.h>
 
 #include "libctemplate/ctemplate.h"
-#include "server.h"
+#include "server/server.h"
+#include "app.h"
 
 struct dinosaur 
 {
@@ -28,17 +29,12 @@ void free_dinosaurs(struct dinosaur *d)
     }
 }
 
-void indexPage(Response *resp)
-{
-    resp->TMPL_file = setPath("index.html");
-}
-
 
 void dinosaurIndexPage(Response *resp, Request *req)
 {
     resp->TMPL_file = setPath("dinosaur/index.html");
 
-    char *a = getRequestArg(req, "name");
+    char *name = getRequestUrlArg(req, "name");
 
     sqlite3 *db;
     int rc = sqlite3_open("test.db", &db);
@@ -52,7 +48,7 @@ void dinosaurIndexPage(Response *resp, Request *req)
 
     const char *sql_t = "SELECT * FROM dinosaur WHERE name LIKE '%s%%' ORDER BY name DESC LIMIT 21";
     char sql[1024];
-    sqlite3_snprintf(1024, sql, sql_t, a);
+    sqlite3_snprintf(1024, sql, sql_t, name);
 
     sqlite3_stmt *stmt;
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
@@ -181,32 +177,4 @@ void dinosaurShowPage (Response *resp, Request *req)
     sqlite3_close(db);
 
     return;
-}
-
-
-
-void helloPage(Response *resp)
-{
-    resp->TMPL_file = setPath("index");
-    resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "hello", "Hello world!", 0);
-}
-
-
-
-
-void mapRoute(Request *req, Response *resp)
-{
-    if (strcmp(req->route, "/") == 0)
-        indexPage(resp);
-    else if (strcmp(req->route, "/hello") == 0)
-        helloPage(resp);
-    else if (strcmp(req->route, "/dinosaur") == 0)
-        dinosaurIndexPage(resp, req);
-    else if (regexMatch("/dinosaur/show/[0-9]*$", req->route) == 0)
-        dinosaurShowPage(resp, req);
-    else
-    {
-        resp->status = HTTP_NOTFOUND;
-        addError(resp, NO_ROUTE);
-    }
 }
