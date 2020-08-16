@@ -25,6 +25,7 @@ int main (int argc, char *argv[])
   int    desc_ready, end_server = FALSE, compress_array = FALSE;
   int    close_conn;
   char   buffer[256];
+  char   request[8096];
   struct sockaddr_in6 addr;
   int    timeout;
   struct pollfd fds[200];
@@ -231,7 +232,9 @@ int main (int argc, char *argv[])
         /* Receive all incoming data on this socket            */
         /* before we loop back and call poll again.            */
         /*******************************************************/
-        char *request = calloc(1,1);
+
+        memset(request, 0, sizeof(request));
+        size_t requestLen = 0;
 
         do
         {
@@ -270,12 +273,18 @@ int main (int argc, char *argv[])
           len = rc;
           printf("  %d bytes received\n", len);
 
-          request = realloc(request, strlen(request) + len + 1);
-          strcat(request, buffer);
+          requestLen += len;
+          if (requestLen >= sizeof(request))
+          {
+            printf("  request body too long\n");
+            close_conn = TRUE;
+            break;
+          }
 
+          strncat(request, buffer, len);
           if (len < sizeof(buffer) - 1)
           {
-              printf("  Request has been received in full\n%s\n\n", request);
+              printf("  Request has been received in full\n");
               char *response = handleRequest(request);
 
               /*****************************************************/
@@ -285,15 +294,13 @@ int main (int argc, char *argv[])
               if (rc < 0)
                   perror("  send() failed");
               else
-                  printf("  Response has been sent\n%s\n\n", response);
+                  printf("  Response has been sent\n");
 
               free(response);
               close_conn = TRUE;
               break;
           }
         } while(TRUE);
-
-        free(request);
 
         /*******************************************************/
         /* If the close_conn flag was turned on, we need       */

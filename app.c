@@ -8,19 +8,26 @@
 #include "app.h"
 
 
-void mapRoute(Request *req, Response *resp)
+int mapRoute(Request *req, Response *resp)
 {
+    int routed = 0;
     if ( routeIs(req, "/") )
-        indexPage(resp, req);
-    else if ( routeIs(req, "/hello") )
-        helloPage(resp);
-    else if ( routeIsRegEx(req, "/hello/[0-9]*$") )
-        helloPage(resp);
-    else
     {
-        resp->status = HTTP_NOTFOUND;
-        addError(resp, NO_ROUTE);
+        indexPage(resp, req);
+        routed = 1;
     }
+    else if ( routeIs(req, "/hello") )
+    {
+        helloPage(resp);
+        routed = 1;
+    }
+    else if ( routeIsRegEx(req, "/hello/[0-9]*$") )
+    {
+        helloPage(resp);
+        routed = 1;
+    }
+
+    return routed;
 }
 
 
@@ -43,11 +50,9 @@ char *handleRequest(char *raw_request)
         return NULL;
     }
 
-    /* if what is being requested is a file we'll serve it as is */
-    if (strrchr(req->route, '.') != NULL)
+    /* if route does not exist what is being requested is a file */
+    if (!mapRoute(req, resp))
         resp->TMPL_file = setPath(req->route);
-    else
-        mapRoute(req, resp);
 
     renderContent(resp);
 
