@@ -5,6 +5,8 @@
 
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <grp.h>
 #include <regex.h>
 
 
@@ -12,8 +14,8 @@
 #include "server.h"
 
 
-int max ( int a, int b ) { return a > b ? a : b; }
-int min ( int a, int b ) { return a < b ? a : b; }
+static int max ( int a, int b ) { return a > b ? a : b; }
+static int min ( int a, int b ) { return a < b ? a : b; }
 
 
 static char *getMimeType(char *fname)
@@ -71,7 +73,18 @@ static void makeHeader(Response *resp)
 
 void renderContent(Response *resp)
 {
-    readFileOK(resp);
+    int flag = readFileOK(resp);
+    switch(flag)
+    {
+        case -1:
+            addError(resp, NO_FILE);
+            resp->status = HTTP_NOTFOUND;
+            break;
+        case 1:
+            addError(resp, FORBIDDEN);
+            resp->status = HTTP_FORBIDDEN;
+            break;
+    }
 
     TMPL_varlist *vl;
     TMPL_loop *loop;
@@ -97,7 +110,7 @@ void renderContent(Response *resp)
         resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
 
-    resp->content = calloc(10, sizeof(char));
+    resp->content = calloc(1, sizeof(char));
     TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content, stderr);
     resp->content_lenght = strlen(resp->content);
 
@@ -345,67 +358,50 @@ Request *parseRequest(char *raw)
 
 
 
-static void checkFile(Response *resp, unsigned int permission)
+static int checkFile(const char *fname, char permission)
+{
+    struct stat st;
+    struct group *g;
+    int forbidden = 1;
+
+    /* file does not exist */
+    if (lstat(fname, &st) < 0) return -1;
+
+    /* group does not exist */
+    if ((g = getgrnam(PUBLIC_GROUP)) == NULL) return forbidden;
+
+    /* file does not belong to public group */
+    if (g->gr_gid != st.st_gid) return forbidden;
+
+    switch(permission)
+    {
+        case 'r': if ((st.st_mode & S_IRUSR) && (st.st_mode & S_IRGRP)) forbidden = 0; break;
+        case 'w': if ((st.st_mode & S_IWUSR) && (st.st_mode & S_IWGRP)) forbidden = 0; break;
+        case 'x': if ((st.st_mode & S_IXUSR) && (st.st_mode & S_IXGRP)) forbidden = 0; break;
+    }
+
+    return forbidden;
+}
+
+int readFileOK(Response *resp)
 {
     const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
-    struct stat st;
-    mode_t owner, group;
-    uid_t usrID = getuid();
-    gid_t grpID = getgid();
 
-    if (lstat(fname, &st) < 0)
-    {
-        addError(resp, NO_FILE);
-        resp->status = HTTP_NOTFOUND;
-        return;
-    }
-
-    owner = st.st_mode & S_IRWXU;
-    group = st.st_mode & S_IRWXG;
-    
-    if (usrID != st.st_uid || grpID != st.st_gid)
-    {
-        addError(resp, FORBIDDEN);
-        resp->status = HTTP_FORBIDDEN;
-        return;
-    }
-
-    if (!(owner & S_IRUSR) || !(group & S_IRGRP))
-    {
-        addError(resp, FORBIDDEN);
-        resp->status = HTTP_FORBIDDEN;
-    }
-
-    if (permission == 0) return;
-
-    if (!(owner & S_IWUSR) || !(group & S_IWGRP))
-    {
-        addError(resp, FORBIDDEN);
-        resp->status = HTTP_FORBIDDEN;
-    }
-
-    if (permission == 1) return;
-
-    if (!(owner & S_IXUSR) || !(group & S_IXGRP))
-    {
-        addError(resp, FORBIDDEN);
-        resp->status = HTTP_FORBIDDEN;
-    }
+    return checkFile(fname, 'r');
 }
 
-void readFileOK(Response *resp)
+int writeFileOK(Response *resp)
 {
-    checkFile(resp, 0);
+    const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
+
+    return checkFile(fname, 'w');
 }
 
-void writeFileOK(Response *resp)
+int execFileOK(Response *resp)
 {
-    checkFile(resp, 1);
-}
+    const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
 
-void execFileOK(Response *resp)
-{
-    checkFile(resp, 2);
+    return checkFile(fname, 'x');
 }
 
 

@@ -12,6 +12,7 @@
 #define HTTP_SERVICE_UNAVAILABLE 503
 
 
+#define PUBLIC_GROUP "miguel"
 #define TEMPLATE_DIR "public/templates"
 #define JS_DIR "public/static/js"
 #define CSS_DIR "public/static/css"
@@ -19,7 +20,6 @@
 
 typedef enum
 {
-    NO_ROUTE,
     NO_FILE,
     FORBIDDEN,
     INTERNAL_ERROR,
@@ -28,7 +28,6 @@ typedef enum
 SERVER_ERROR;
 
 static const char SERVER_ERROR_MSG[][128] = {
-    "Route not found!",
     "The requested page couldn't be found!",
     "The requested page is forbidden!",
     "Internal server error!",
@@ -87,13 +86,10 @@ typedef struct
 Request;
 
 
-/* utils.c */
-int max(int a, int b);
-int min(int a, int b);
-void readFileOK(Response *resp);
-void writeFileOK(Response *resp);
+int readFileOK(Response *resp);
+int writeFileOK(Response *resp);
+int execFileOK(Response *resp);
 
-/* server.c */
 void renderContent(Response *resp);
 void addError(Response *resp, unsigned char err);
 void freeRequest(Request *req);

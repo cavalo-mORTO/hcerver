@@ -16,6 +16,8 @@ struct dinosaur
     struct dinosaur *next;
 };
 
+int min(int a, int b) { return a < b ? a : b; }
+
 void free_dinosaurs(struct dinosaur *d)
 {
     if (d)
