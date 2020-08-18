@@ -13,7 +13,7 @@ void indexPage(Response *resp, Request *req)
     resp->TMPL_file = setPath("index.html");
     resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, 
             "hello", "I'm the index page.",
-            "name", postName, 0);
+            "name", name, 0);
 }
 
 void helloPage(Response *resp)

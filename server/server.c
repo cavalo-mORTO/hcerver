@@ -20,8 +20,7 @@ static int min ( int a, int b ) { return a < b ? a : b; }
 
 static char *getMimeType(char *fname)
 {
-    char *ext = strrchr(fname, '.');
-    if (!ext) return "text/plain";
+    char *ext = strrchr(fname, '.') ? strrchr(fname, '.') : "something";
 
     ext++;
     if (strcmp(ext, "html"    ) == 0) return "text/html";
@@ -39,7 +38,7 @@ static char *getMimeType(char *fname)
 }
 
 
-static void makeHeader(Response *resp)
+static char *makeHeader(Response *resp)
 {
     char *mime = getMimeType(resp->TMPL_file);
     time_t now = time(NULL);
@@ -56,8 +55,10 @@ static void makeHeader(Response *resp)
             SERVER_NAME,
             ctime(&now));
     
-    resp->header = calloc(head_len + 1, sizeof(char));
-    sprintf(resp->header,
+    char *header = calloc(head_len + 1, sizeof(char));
+    if (!header) return NULL;
+
+    sprintf(header,
             "HTTP/%s %d\n"
             "Content-Type: %s\n"
             "Content-Length: %ld\n"
@@ -68,13 +69,14 @@ static void makeHeader(Response *resp)
             resp->content_lenght,
             SERVER_NAME,
             ctime(&now));
+
+    return header;
 }
 
 
 void renderContent(Response *resp)
 {
-    int flag = readFileOK(resp);
-    switch(flag)
+    switch(readFileOK(resp))
     {
         case -1:
             addError(resp, NO_FILE);
@@ -114,7 +116,7 @@ void renderContent(Response *resp)
     TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content, stderr);
     resp->content_lenght = strlen(resp->content);
 
-    makeHeader(resp);
+    resp->header = makeHeader(resp);
 }
 
 
@@ -206,36 +208,29 @@ Request *parseRequest(char *raw)
     // Request-URI
     size_t url_len = strcspn(raw, " ");
 
-    // give url buffer more memory than needed so that we don't go out of bounds in the while loop
-    char *url = calloc(1, url_len + 10);
+    // get the route of url
+    size_t route_len = min(strcspn(raw, "?"), url_len);
+    req->route = calloc(route_len + 1, sizeof(char));
+    if (!req->route) {
+        freeRequest(req);
+        return NULL;
+    }
+    memcpy(req->route, raw, route_len);
+
+    char *url, *tofree_url;
+    url = tofree_url = calloc(1 + url_len - route_len, sizeof(char));
     if (!url)
     {
         freeRequest(req);
         return NULL;
     }
-
-    // copy unto it the contents of raw
-    memcpy(url, raw, url_len);
-
-    // set pointer for loop
-    char *url_p = url;
-
-    // get the route of url
-    size_t route_len = min(strcspn(url_p, "?"), strcspn(url_p, " "));
-    req->route = calloc(1, route_len + 1);
-
-    if (!req->route) {
-        freeRequest(req);
-        return NULL;
-    }
-    memcpy(req->route, url_p, route_len);
-    url_p += route_len + 1;
+    memcpy(url, raw + route_len + 1, url_len - route_len);
 
     // retrieve query
     Dict_t *query = NULL, *last_q = NULL;
-    while (*url_p)
+    while (1)
     {
-        size_t arg_len = min(strcspn(url_p, "="), strcspn(url_p, " "));
+        if (!strchr(url, '=')) break;
 
         last_q = query;
         query = calloc(1, sizeof(Dict_t));
@@ -244,33 +239,35 @@ Request *parseRequest(char *raw)
             return NULL;
         }
 
-        query->key = calloc(1, arg_len + 1);
+        size_t key_len = strcspn(url, "=");
+        query->key = calloc(key_len + 1, sizeof(char));
         if (!query->key) {
             freeRequest(req);
             return NULL;
         }
-        memcpy(query->key, url_p, arg_len);
-        url_p += arg_len + 1;
-
-        size_t val_len = min(strcspn(url_p, "&"), strcspn(url_p, " "));
-        query->value = calloc(1, val_len + 1);
+        memcpy(query->key, url, key_len);
+        url += key_len + 1;
+        
+        size_t val_len = min(strcspn(url, "&"), strcspn(url, " "));
+        query->value = calloc(val_len + 1, sizeof(char));
         if (!query->value) {
             freeRequest(req);
             return NULL;
         }
-        memcpy(query->value, url_p, val_len);
-        url_p += val_len + 1;
-
+        memcpy(query->value, url, val_len);
         query->next = last_q;
-    }
-    req->queries = query;
-    free(url);
 
+        if (!strchr(url, '&')) break;
+
+        url += val_len + 1;
+    }
+    free(tofree_url);
+    req->queries = query;
     raw += url_len + 1; // move past <SP>
 
     // HTTP-Version
     size_t ver_len = strcspn(raw, "\r\n");
-    req->version = calloc(1, ver_len + 1);
+    req->version = calloc(ver_len + 1, sizeof(char));
     if (!req->version) {
         freeRequest(req);
         return NULL;
@@ -290,7 +287,7 @@ Request *parseRequest(char *raw)
 
         // name
         size_t key_len = strcspn(raw, ":");
-        header->key = calloc(1, key_len + 1);
+        header->key = calloc(key_len + 1, sizeof(char));
         if (!header->key) {
             freeRequest(req);
             return NULL;
@@ -301,7 +298,7 @@ Request *parseRequest(char *raw)
 
         // value
         size_t value_len = strcspn(raw, "\r\n");
-        header->value = calloc(1, value_len + 1);
+        header->value = calloc(value_len + 1, sizeof(char));
         if (!header->value) {
             freeRequest(req);
             return NULL;
@@ -316,21 +313,20 @@ Request *parseRequest(char *raw)
     raw += 2; // move past <CR><LF>
 
     size_t body_len = strlen(raw);
-    req->body = calloc(1, body_len + 1);
+    req->body = calloc(body_len + 1, sizeof(char));
     if (!req->body) {
         freeRequest(req);
         return NULL;
     }
     memcpy(req->body, raw, body_len);
 
+    Dict_t *post = NULL, *last_post = NULL;
     if (req->method == POST)
     {
-        Dict_t *post = NULL, *lastPost = NULL;
-
         char *token;
         while ((token = strsep(&raw, "&")) != NULL)
         {
-            lastPost = post;
+            last_post = post;
             post = calloc(1, sizeof(Dict_t));
             if (!post)
             {
@@ -346,12 +342,12 @@ Request *parseRequest(char *raw)
 
             post->key = strdup(key);
             post->value = strdup(val);
-            post->next = lastPost;
+            post->next = last_post;
 
             free(tofree);
         }
-        req->posts = post;
     }
+    req->posts = post;
 
     return req;
 }
@@ -412,18 +408,15 @@ char *setPath(char *fname)
     if (!ext) return strdup(fname);
 
     ext++;
-    char *dir;
+    char *dir = "";
     if (strcmp(ext, "html") == 0)
         dir = TEMPLATE_DIR;
     else if (strcmp(ext, "js") == 0)
         dir = JS_DIR;
     else if (strcmp(ext, "css") == 0)
         dir = CSS_DIR;
-    else 
-        dir = "";
 
     char *fmt = fname[0] == '/' ? "%s%s" : "%s/%s";
-
     size_t len = snprintf(NULL, 0, fmt, dir, fname);
 
     char *path = calloc(len + 1, sizeof(char));
@@ -435,16 +428,15 @@ char *setPath(char *fname)
 
 static char *getRequestArg(Dict_t *arg, char *argToFind)
 {
-    if (!arg) return NULL;
+    char *value = NULL;
 
-    do
+    while (arg != NULL)
     {
-        if (strcmp(arg->key, argToFind) == 0) return arg->value;
+        if (strcmp(arg->key, argToFind) == 0) value = arg->value;
         arg = arg->next;
     }
-    while (arg != NULL);
 
-    return NULL;
+    return value;
 }
 
 char *getRequestUrlArg(Request *req, char *argToFind)
@@ -487,9 +479,7 @@ static int regexMatch(char *matchStr, char *regexStr)
     rc = regexec(&regex, matchStr, 0, NULL, 0);
     regfree(&regex);
 
-    if (rc == 0) return 0;
-
-    return 1;
+    return !rc;
 }
 
 
@@ -500,5 +490,5 @@ int routeIs(Request *req, char *route)
 
 int routeIsRegEx(Request *req, char *regex)
 {
-    return !regexMatch(req->route, regex);
+    return regexMatch(req->route, regex);
 }

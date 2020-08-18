@@ -218,7 +218,7 @@ mymalloc(size_t size) {
 }
 
 static void
-growBuf(char **bufPtr, unsigned int newLength, unsigned int oldLength) {
+growBuf(char **bufPtr, size_t newLength, size_t oldLength) {
     char *tempBufPtr;
     tempBufPtr = calloc(newLength, sizeof(char));
 
@@ -1510,7 +1510,7 @@ TMPL_write(const char *filename, const char *tmplstr,
 
     freetag(t->roottag);
     free(t);
-    return 0;
+    return ret;
 }
 
 /*
