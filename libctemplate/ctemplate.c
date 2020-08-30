@@ -217,16 +217,21 @@ mymalloc(size_t size) {
     return ret;
 }
 
-static void
-growBuf(char **bufPtr, size_t newLength, size_t oldLength) {
-    char *tempBufPtr;
-    tempBufPtr = calloc(newLength, sizeof(char));
+static void *
+myrealloc(void *ptr, size_t new_len, size_t old_len, size_t size) {
+    void *ret = realloc(ptr, new_len * size);
+    if (ret == 0) {
+        fputs("C Template library: out of memory\n", stderr);
+        exit(1);
+    }
 
-    memcpy(tempBufPtr, *bufPtr, oldLength);
+    ptr = ret;
+    if (new_len > old_len)
+        memset(ptr + old_len, 0, new_len - old_len);
 
-    free(*bufPtr);
-    *bufPtr = tempBufPtr;
+    return ptr;
 }
+
 
 /*
  * newtemplate() creates a new template struct and reads the template
@@ -1084,16 +1089,16 @@ is_true(const tagnode *iftag, const TMPL_varlist *varlist) {
  */
 
 static void
-write_text(const char *p, int len, template *t) {
+write_text(const char *p, int len, char **out, size_t *out_size) {
     int i, k;
 
-    size_t oldLen = strlen(*(t->out));
-    size_t newLen = oldLen + len + 1;
+    size_t old_len = strlen(*out);
+    size_t new_len = old_len + len + 1;
 
-    if (newLen >= t->out_size)
+    if (new_len >= *out_size)
     {
-        t->out_size = newLen * 2;
-        growBuf(t->out, t->out_size, oldLen);
+        *out_size = new_len * 2;
+        *out = myrealloc(*out, *out_size, old_len, sizeof(char));
     }
 
     for (i = 0; i < len; i++) {
@@ -1118,7 +1123,7 @@ write_text(const char *p, int len, template *t) {
                 }
             }
         }
-        (*(t->out))[oldLen + i] = p[i];
+        (*out)[old_len + i] = p[i];
     }
 }
 
@@ -1172,7 +1177,7 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
     switch(tag->kind) {
 
     case tag_text:
-        write_text(tag->tag.text.start, tag->tag.text.len, t);
+        write_text(tag->tag.text.start, tag->tag.text.len, t->out, &t->out_size);
         break;
 
     case tag_var:
@@ -1184,20 +1189,19 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
 
         /* Use the tag's format function or else just use fputs() */
 
-        size_t oldLen = strlen(*(t->out));
-        size_t newLen = oldLen + strlen(value) + 1;
-
-        if (newLen >= t->out_size)
+        size_t old_len = strlen(*t->out);
+        size_t new_len = old_len + strlen(value) + 1;
+        if (new_len >= t->out_size)
         {
-            t->out_size = newLen * 2;
-            growBuf(t->out, t->out_size, oldLen);
+            t->out_size = new_len * 2;
+            *t->out = myrealloc(*t->out, t->out_size, old_len, sizeof(char));
         }
 
         if (tag->tag.var.fmtfunc != 0) {
-            tag->tag.var.fmtfunc(value, *(t->out));
+            tag->tag.var.fmtfunc(value, *t->out);
         }
         else {
-            strcat(*(t->out), value);
+            strcat(*t->out, value);
         }
         break;
 
@@ -1491,13 +1495,13 @@ TMPL_free_fmtlist(TMPL_fmtlist *fmtlist) {
 int
 TMPL_write(const char *filename, const char *tmplstr,
     const TMPL_fmtlist *fmtlist, const TMPL_varlist *varlist,
-    char **out, FILE *errout)
+    char **out, size_t out_sz, FILE *errout)
 {
     int ret;
     template *t;
 
 
-    if ((t = newtemplate(filename, tmplstr, fmtlist, out, 0, errout)) == 0) {
+    if ((t = newtemplate(filename, tmplstr, fmtlist, out, out_sz, errout)) == 0) {
         return -1;
     }
     t->roottag = parselist(t, 0);

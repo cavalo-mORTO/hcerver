@@ -18,21 +18,79 @@ static int max ( int a, int b ) { return a > b ? a : b; }
 static int min ( int a, int b ) { return a < b ? a : b; }
 
 
+static char *getDictValue(Dict_t *d, char *key)
+{
+    char *value = NULL;
+    for (; d != NULL; d = d->next)
+    {
+        if (strcmp(d->key, key) == 0)
+        {
+            value = d->value;
+            break;
+        }
+    }
+
+    return value;
+}
+
+static char *getMultiFormData(MultiForm_t *m, char *field)
+{
+    char *data = NULL;
+    char *name;
+    for (; m != NULL; m = m->next)
+    {
+        name = getDictValue(m->head, "name");
+        if (name != NULL && strcmp(name, field) == 0)
+        {
+            data = m->data;
+            break;
+        }
+    }
+
+    return data;
+}
+
+char *getRequestHeader(Request *req, char *header)
+{
+    return getDictValue(req->headers, header);
+}
+
+char *getRequestGetField(Request *req, char *field)
+{
+    if (req->method != GET) return NULL;
+
+    return getDictValue(req->queries, field);
+}
+
+char *getRequestPostField(Request *req, char *field)
+{
+    if (req->method != POST) return NULL;
+
+    char *type = getRequestHeader(req, "Content-Type");
+    if (type != NULL && strncmp(type, "multipart/form-data", 19) == 0)
+        return getMultiFormData(req->multi, field);
+
+    return getDictValue(req->form, field);
+}
+
+
 static char *getMimeType(char *fname)
 {
-    char *ext = strrchr(fname, '.') ? strrchr(fname, '.') : "something";
+    char *ext = strrchr(fname, '.');
+
+    if (!ext)                       return "text/plain";
 
     ext++;
-    if (strcmp(ext, "html"    ) == 0) return "text/html";
-    else if (strcmp(ext, "css") == 0) return "text/css";
-    else if (strcmp(ext, "js" ) == 0) return "text/javascript";
-    else if (strcmp(ext, "csv") == 0) return "text/csv";
-    else if ( (strcmp(ext, "jpeg")) == 0 || (strcmp(ext, "jpg")) == 0 ) return "image/jpeg";
-    else if (strcmp(ext, "png") == 0) return "image/png";
-    else if (strcmp(ext, "gif") == 0) return "image/gif";
-    else if (strcmp(ext, "bmp") == 0) return "image/bmp";
-    else if (strcmp(ext, "svg") == 0) return "image/svg+xml";
-    else if (strcmp(ext, "mp4") == 0) return "video/mp4";
+    if (strcmp(ext, "html") == 0)   return "text/html";
+    if (strcmp(ext, "css" ) == 0)   return "text/css";
+    if (strcmp(ext, "js"  ) == 0)   return "text/javascript";
+    if (strcmp(ext, "csv" ) == 0)   return "text/csv";
+    if ( (strcmp(ext, "jpeg")) == 0 || (strcmp(ext, "jpg")) == 0 ) return "image/jpeg";
+    if (strcmp(ext, "png" ) == 0)   return "image/png";
+    if (strcmp(ext, "gif" ) == 0)   return "image/gif";
+    if (strcmp(ext, "bmp" ) == 0)   return "image/bmp";
+    if (strcmp(ext, "svg" ) == 0)   return "image/svg+xml";
+    if (strcmp(ext, "mp4" ) == 0)   return "video/mp4";
 
     return "text/plain";
 }
@@ -112,8 +170,8 @@ void renderContent(Response *resp)
         resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
 
-    resp->content = calloc(1000, sizeof(char));
-    TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content, stderr);
+    resp->content = calloc(4096, sizeof(char));
+    TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content, 4096, stderr);
     resp->content_lenght = strlen(resp->content);
 
     resp->header = makeHeader(resp);
@@ -123,7 +181,7 @@ void renderContent(Response *resp)
 void addError(Response *resp, unsigned char err)
 {
     Error_t *e;
-    for (e = resp->errors; e; e = e->next)
+    for (e = resp->errors; e != NULL; e = e->next)
     {
         if (e->error == err)
             return;
@@ -147,29 +205,39 @@ void addError(Response *resp, unsigned char err)
 
 static void freeDict(Dict_t *d)
 {
-    if (d)
-    {
-        freeDict(d->next);
-        free(d->key);
-        free(d->value);
-        free(d);
-    }
+    if (d == NULL) return;
+
+    freeDict(d->next);
+    free(d->key);
+    free(d->value);
+    free(d);
 }
 
 static void freeError(Error_t *e)
 {
-    if (e)
-    {
-        freeError(e->next);
-        free(e);
-    }
+    if (e == NULL) return;
+
+    freeError(e->next);
+    free(e);
+}
+
+
+static void freeMultiForm(MultiForm_t *m)
+{
+    if (m == NULL) return;
+
+    freeMultiForm(m->next);
+    freeDict(m->head);
+    free(m->data);
+    free(m);
 }
 
 void freeRequest(Request *req)
 {
     freeDict(req->queries);
     freeDict(req->headers);
-    freeDict(req->posts);
+    freeDict(req->form);
+    freeMultiForm(req->multi);
     free(req->route);
     free(req->version);
     free(req->body);
@@ -210,22 +278,11 @@ Request *parseRequest(char *raw)
 
     // get the route of url
     size_t route_len = min(strcspn(raw, "?"), url_len);
-    req->route = calloc(route_len + 1, sizeof(char));
-    if (!req->route) {
-        freeRequest(req);
-        return NULL;
-    }
-    memcpy(req->route, raw, route_len);
+    req->route = strndup(raw, route_len);
 
     char *url, *tofree_url;
-    url = tofree_url = calloc(1 + url_len - route_len, sizeof(char));
-    if (!url)
-    {
-        freeRequest(req);
-        return NULL;
-    }
-    memcpy(url, raw + route_len + 1, url_len - route_len);
-
+    url = tofree_url = strndup(raw + route_len + 1, url_len - route_len);
+    
     // retrieve query
     Dict_t *query = NULL, *last_q = NULL;
     while (1)
@@ -240,21 +297,13 @@ Request *parseRequest(char *raw)
         }
 
         size_t key_len = strcspn(url, "=");
-        query->key = calloc(key_len + 1, sizeof(char));
-        if (!query->key) {
-            freeRequest(req);
-            return NULL;
-        }
-        memcpy(query->key, url, key_len);
+        query->key = strndup(url, key_len);
+
         url += key_len + 1;
         
         size_t val_len = min(strcspn(url, "&"), strcspn(url, " "));
-        query->value = calloc(val_len + 1, sizeof(char));
-        if (!query->value) {
-            freeRequest(req);
-            return NULL;
-        }
-        memcpy(query->value, url, val_len);
+        query->value = strndup(url, val_len);
+
         query->next = last_q;
 
         if (!strchr(url, '&')) break;
@@ -267,12 +316,8 @@ Request *parseRequest(char *raw)
 
     // HTTP-Version
     size_t ver_len = strcspn(raw, "\r\n");
-    req->version = calloc(ver_len + 1, sizeof(char));
-    if (!req->version) {
-        freeRequest(req);
-        return NULL;
-    }
-    memcpy(req->version, raw, ver_len);
+    req->version = strndup(raw, ver_len);
+
     raw += ver_len + 2; // move past <CR><LF>
 
     Dict_t *header = NULL, *last = NULL;
@@ -287,23 +332,15 @@ Request *parseRequest(char *raw)
 
         // name
         size_t key_len = strcspn(raw, ":");
-        header->key = calloc(key_len + 1, sizeof(char));
-        if (!header->key) {
-            freeRequest(req);
-            return NULL;
-        }
-        memcpy(header->key, raw, key_len);
+        header->key = strndup(raw, key_len);
+
         raw += key_len + 1; // move past :
         while (*raw == ' ') raw++;
 
         // value
         size_t value_len = strcspn(raw, "\r\n");
-        header->value = calloc(value_len + 1, sizeof(char));
-        if (!header->value) {
-            freeRequest(req);
-            return NULL;
-        }
-        memcpy(header->value, raw, value_len);
+        header->value = strndup(raw, value_len);
+
         raw += value_len + 2; // move past <CR><LF>
 
         // next
@@ -320,11 +357,81 @@ Request *parseRequest(char *raw)
     }
     memcpy(req->body, raw, body_len);
 
-    Dict_t *post = NULL, *last_post = NULL;
-    if (req->method == POST)
+    if (req->method != POST)
+        return req;
+
+    char *content = getRequestHeader(req, "Content-Type");
+    if (content != NULL && strncmp(content, "multipart/form-data", 19) == 0)
     {
-        char *token;
-        while ((token = strsep(&raw, "&")) != NULL)
+        char *boundary = strchr(content, '=') - 1;
+        boundary[0] = '-';
+        boundary[1] = '-';
+
+        raw = strstr(raw, boundary);
+
+        MultiForm_t *multi = NULL, *last_multi = NULL;
+        while (raw != NULL && strncmp(raw + strlen(boundary), "--", 2) != 0)
+        {
+            raw += strlen(boundary);
+
+            last_multi = multi;
+            multi = calloc(1, sizeof(MultiForm_t));
+            if (!multi)
+            {
+                freeRequest(req);
+                return NULL;
+            }
+
+            Dict_t *head = NULL, *last_head = NULL;
+            while (1)
+            {
+                last_head = head;
+                head = calloc(1, sizeof(Dict_t));
+                if (!head)
+                {
+                    freeRequest(req);
+                    return NULL;
+                }
+
+                char *key = strchr(raw, ';') + 1;
+                while (key[0] == ' ') key++;
+
+                char *key_end = strchr(key, '=');
+                head->key = strndup(key, key_end - key);
+
+                char *value = key_end + 2; 
+                char *value_end = strchr(value, '"');
+
+                head->value = strndup(value, value_end - value);
+                head->next = last_head;
+
+                raw = value_end + 1;
+
+                if (raw[0] == '\r' || raw[0] == '\n') break;
+            }
+
+            while (raw[0] == '\r' || raw[0] == '\n') raw++; 
+
+            char *data = raw;
+            char *data_end = strstr(data, boundary);
+
+            if (data_end)
+                data_end -= 2; /* discard <CR><LF> */
+            else
+                data_end = &raw[strlen(raw) - 1];
+
+            multi->head = head;
+            multi->data = strndup(data, data_end - data);
+            multi->next = last_multi;
+
+            raw = strstr(raw, boundary); /* jump to next field */
+        }
+        req->multi = multi;
+    }
+    else
+    {
+        Dict_t *post = NULL, *last_post = NULL;
+        while (1)
         {
             last_post = post;
             post = calloc(1, sizeof(Dict_t));
@@ -334,24 +441,27 @@ Request *parseRequest(char *raw)
                 return NULL;
             };
 
-            char *string, *tofree;
-            string = tofree = strdup(token);
+            char *key = raw; 
+            char *key_end = strchr(key, '=');
 
-            char *key = strsep(&string, "=");
-            char *val = string;
+            char *value = key_end + 1;
+            char *value_end = strchr(value, '&') ? strchr(value, '&') : strchr(value, '\0');
 
-            post->key = strdup(key);
-            post->value = strdup(val);
+            post->key = strndup(key, key_end - key);
+            post->value = strndup(value, value_end - value);
             post->next = last_post;
 
-            free(tofree);
+            raw = value_end;
+
+            if (raw[0] == '\0') break;
+
+            raw++;
         }
+        req->form = post;
     }
-    req->posts = post;
 
     return req;
 }
-
 
 
 static int checkFile(const char *fname, char permission)
@@ -426,46 +536,25 @@ char *setPath(char *fname)
 }
 
 
-static char *getRequestArg(Dict_t *arg, char *argToFind)
-{
-    char *value = NULL;
 
-    while (arg != NULL)
+
+char *getRouteParam(Request *req, unsigned short pos)
+{
+    char *ptr = NULL;
+    unsigned short i = 0;
+
+    ptr = req->route;
+    while (i < pos)
     {
-        if (strcmp(arg->key, argToFind) == 0) value = arg->value;
-        arg = arg->next;
-    }
-
-    return value;
-}
-
-char *getRequestUrlArg(Request *req, char *argToFind)
-{
-    return getRequestArg(req->queries, argToFind);
-}
-
-
-char *getRequestPostArg(Request *req, char *argToFind)
-{
-    return getRequestArg(req->posts, argToFind);
-}
-
-
-char *getRouteParam(Request *req, unsigned int pos)
-{
-    char *token, *string, *tofree;
-    int i = 0;
-
-    tofree = string = strdup(req->route);
-    while ((token = strsep(&string, "/")) != NULL)
-    {
-        if (i > pos) break;
         i++;
-    }
-    char *toReturn = strdup(token);
+        ptr = strchr(ptr, '/') + 1;
 
-    free(tofree);
-    return toReturn;
+        if (ptr == NULL) break;
+    }
+    char *param = ptr;
+    char *param_end = strchr(param, '/') ? strchr(param, '/') : strchr(param, '\0');
+
+    return strndup(param, param_end - param);
 }
 
 static int regexMatch(char *matchStr, char *regexStr)
@@ -474,7 +563,7 @@ static int regexMatch(char *matchStr, char *regexStr)
     int rc;
 
     rc = regcomp(&regex, regexStr, 0);
-    if (rc != 0) return 1;
+    if (rc) return rc;
 
     rc = regexec(&regex, matchStr, 0, NULL, 0);
     regfree(&regex);
@@ -485,7 +574,7 @@ static int regexMatch(char *matchStr, char *regexStr)
 
 int routeIs(Request *req, char *route)
 {
-    return !strcmp(req->route, route);
+    return (strcmp(req->route, route) == 0);
 }
 
 int routeIsRegEx(Request *req, char *regex)

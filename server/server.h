@@ -46,7 +46,7 @@ Error_t;
 typedef struct
 {
     size_t content_lenght;
-    unsigned int status;
+    unsigned short status;
     TMPL_varlist *TMPL_mainlist;
     char *TMPL_file;
     Error_t *errors;
@@ -73,6 +73,14 @@ typedef struct Dict
 }
 Dict_t;
 
+typedef struct MultiForm
+{
+    struct Dict *head;
+    char *data;
+    struct MultiForm *next;
+}
+MultiForm_t;
+
 typedef struct
 {
     Method method;
@@ -81,7 +89,10 @@ typedef struct
     char *version;
     Dict_t *headers;
     char *body;
-    Dict_t *posts; /* only is filled is request method is POST */
+
+    /* method is POST */
+    Dict_t *form; /* application/x-www-form-urlencoded */
+    MultiForm_t *multi; /* multipart/form-data */
 }
 Request;
 
@@ -97,9 +108,10 @@ void freeResponse(Response *resp);
 Request *parseRequest(char *raw);
 
 
-char *getRequestUrlArg(Request *req, char *argToFind);
-char *getRequestPostArg(Request *req, char *argToFind);
-char *getRouteParam(Request *req, unsigned int pos);
+char *getRequestHeader(Request *req, char *header);
+char *getRequestUrlQuery(Request *req, char *query);
+char *getRequestPostField(Request *req, char *field);
+char *getRouteParam(Request *req, unsigned short pos);
 char *setPath(char *fname);
 int routeIs(Request *req, char *route);
 int routeIsRegEx(Request *req, char *regex);

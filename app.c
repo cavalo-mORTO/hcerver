@@ -10,24 +10,21 @@
 
 int mapRoute(Request *req, Response *resp)
 {
-    int routed = 0;
-    if ( routeIs(req, "/") )
-    {
-        indexPage(resp, req);
-        routed = 1;
-    }
-    else if ( routeIs(req, "/hello") )
-    {
-        helloPage(resp);
-        routed = 1;
-    }
-    else if ( routeIsRegEx(req, "/hello/[0-9]*$") )
-    {
-        helloPage(resp);
-        routed = 1;
-    }
+    /* if route is found return 0 */
+    if (routeIs(req, "/"))
+        return indexPage(resp, req);
 
-    return routed;
+    if (routeIs(req, "/hello"))
+        return helloPage(resp, req);
+
+    if (routeIsRegEx(req, "/hello/[0-9]*$"))
+        return helloPage(resp, req);
+
+    if (routeIsRegEx(req, "/hello/[0-9]*/show"))
+        return indexPage(resp, req);
+
+    /* no route was found */
+    return 1;
 }
 
 
@@ -51,7 +48,7 @@ char *handleRequest(char *raw_request)
     }
 
     /* if route does not exist what is being requested is a file */
-    if (!mapRoute(req, resp))
+    if (mapRoute(req, resp) != 0)
         resp->TMPL_file = setPath(req->route);
 
     renderContent(resp);
