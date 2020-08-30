@@ -99,11 +99,11 @@
 					</button>
 				</div>
 				<ul id="i_shall_collapse" class="collapse list-group list-group-flush">
-					{% for parent in data.get_parents() %}
-					<li class="list-group-item">
-						<a href="" class="card-link">{{ parent.name }}</a>
+                    <TMPL_LOOP name="parents">
+                    <li class="list-group-item">
+						<a href="<TMPL_VAR name="parent_id">" class="card-link"><TMPL_VAR name="parent_name"></a>
 					</li>
-    					{% endfor %}
+                    </TMPL_LOOP>
 				</ul>
 			</div>
 		</div>

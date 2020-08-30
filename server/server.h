@@ -1,6 +1,5 @@
 #define SERVER_NAME "The WebServer with Thick Thighs (づ｡◕‿‿◕｡)づ"
 
-
 #define HTTP_VER "1.1"
 #define HTTP_OK 200
 #define HTTP_NOTFOUND 404
@@ -11,12 +10,10 @@
 #define HTTP_NOT_IMPLEMENTED 501
 #define HTTP_SERVICE_UNAVAILABLE 503
 
-
 #define PUBLIC_GROUP "miguel"
 #define TEMPLATE_DIR "public/templates"
 #define JS_DIR "public/static/js"
 #define CSS_DIR "public/static/css"
-
 
 typedef enum
 {
@@ -46,12 +43,14 @@ Error_t;
 typedef struct
 {
     size_t content_lenght;
-    unsigned int status;
+    unsigned short status;
     TMPL_varlist *TMPL_mainlist;
     char *TMPL_file;
     Error_t *errors;
     char *header;
     char *content;
+
+    sqlite3 *db;
 }
 Response;
 
@@ -73,6 +72,14 @@ typedef struct Dict
 }
 Dict_t;
 
+typedef struct MultiForm
+{
+    struct Dict *head;
+    char *data;
+    struct MultiForm *next;
+}
+MultiForm_t;
+
 typedef struct
 {
     Method method;
@@ -81,7 +88,10 @@ typedef struct
     char *version;
     Dict_t *headers;
     char *body;
-    Dict_t *posts; /* only is filled is request method is POST */
+
+    /* method is POST */
+    Dict_t *form; /* application/x-www-form-urlencoded */
+    MultiForm_t *multi; /* multipart/form-data */
 }
 Request;
 
@@ -97,9 +107,10 @@ void freeResponse(Response *resp);
 Request *parseRequest(char *raw);
 
 
-char *getRequestUrlArg(Request *req, char *argToFind);
-char *getRequestPostArg(Request *req, char *argToFind);
-char *getRouteParam(Request *req, unsigned int pos);
+char *getRequestHeader(Request *req, char *header);
+char *getRequestGetField(Request *req, char *field);
+char *getRequestPostField(Request *req, char *field);
+char *getRouteParam(Request *req, unsigned short pos);
 char *setPath(char *fname);
 int routeIs(Request *req, char *route);
 int routeIsRegEx(Request *req, char *regex);

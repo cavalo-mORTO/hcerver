@@ -1,5 +1,5 @@
 char *handleRequest(char *raw_request);
-void indexPage(Response *resp, Request *req);
-void helloPage(Response *resp);
-void dinosaurIndexPage(Response *resp, Request *req);
-void dinosaurShowPage (Response *resp, Request *req);
+int indexPage(Response *resp, Request *req);
+int helloPage(Response *resp, Request *req);
+int dinosaurIndexPage(Response *resp, Request *req);
+int dinosaurShowPage (Response *resp, Request *req);

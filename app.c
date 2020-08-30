@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <sqlite3.h>
+
 
 #include "libctemplate/ctemplate.h"
 #include "server/server.h"
@@ -10,34 +12,27 @@
 
 int mapRoute(Request *req, Response *resp)
 {
-    int routed = 0;
-    if ( routeIs(req, "/") )
-    {
-        indexPage(resp, req);
-        routed = 1;
-    }
-    else if ( routeIs(req, "/hello") )
-    {
-        helloPage(resp);
-        routed = 1;
-    }
-    else if ( routeIsRegEx(req, "/hello/[0-9]*$") )
-    {
-        helloPage(resp);
-        routed = 1;
-    }
-    else if (routeIs(req, "/dinosaur"))
-    {
-        dinosaurIndexPage(resp, req);
-        routed = 1;
-    }
-    else if (routeIsRegEx(req, "/dinosaur/show/[0-9]*$"))
-    {
-        dinosaurShowPage(resp, req);
-        routed = 1;
-    }
+    /* if route is found return 0 */
+    if (routeIs(req, "/"))
+        return indexPage(resp, req);
 
-    return routed;
+    if (routeIs(req, "/hello"))
+        return helloPage(resp, req);
+
+    if (routeIsRegEx(req, "/hello/[0-9]*$"))
+        return helloPage(resp, req);
+
+    if (routeIsRegEx(req, "/hello/[0-9]*/show"))
+        return indexPage(resp, req);
+
+    if (routeIs(req, "/dinosaur"))
+        return dinosaurIndexPage(resp, req);
+
+    if (routeIsRegEx(req, "/dinosaur/show/[0-9]*$"))
+        return dinosaurShowPage(resp, req);
+
+    /* no route was found */
+    return 1;
 }
 
 
@@ -52,6 +47,16 @@ char *handleRequest(char *raw_request)
     resp->status = HTTP_OK;
     resp->errors = NULL;
 
+    /* open database conn */
+    if (sqlite3_open(getenv("DATABASE_URL"), &resp->db) != SQLITE_OK)
+    {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(resp->db));
+        sqlite3_close(resp->db);
+
+        freeResponse(resp);
+        return NULL;
+    }
+
     Request *req = parseRequest(raw_request);
     if (!req) 
     {
@@ -61,7 +66,7 @@ char *handleRequest(char *raw_request)
     }
 
     /* if route does not exist what is being requested is a file */
-    if (!mapRoute(req, resp))
+    if (mapRoute(req, resp) != 0)
         resp->TMPL_file = setPath(req->route);
 
     renderContent(resp);
@@ -71,6 +76,8 @@ char *handleRequest(char *raw_request)
     /* concat response head with the body */
     char *response = calloc(len + 1, sizeof(char));
     sprintf(response, "%s\n%s", resp->header, resp->content);
+
+    sqlite3_close(resp->db);
 
     freeRequest(req);
     freeResponse(resp);

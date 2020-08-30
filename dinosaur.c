@@ -5,178 +5,136 @@
 
 #include "libctemplate/ctemplate.h"
 #include "server/server.h"
-#include "app.h"
 
-struct dinosaur 
+
+
+int dinosaurIndexPage(Response *resp, Request *req)
 {
-    char *id;
-    char *name;
-    char *desc;
-    char *img;
-    struct dinosaur *next;
-};
+    char sql[1024];
+    int rc;
 
-int min(int a, int b) { return a < b ? a : b; }
-
-void free_dinosaurs(struct dinosaur *d)
-{
-    if (d)
-    {
-        free_dinosaurs(d->next);
-        free(d->id);
-        free(d->name);
-        free(d->desc);
-        free(d->img);
-        free(d);
-    }
-}
-
-
-void dinosaurIndexPage(Response *resp, Request *req)
-{
     resp->TMPL_file = setPath("dinosaur/index.html");
 
-    char *name = getRequestUrlArg(req, "name");
+    char *name = getRequestGetField(req, "name");
 
-    sqlite3 *db;
-    int rc = sqlite3_open("test.db", &db);
-    if (rc != SQLITE_OK)
-    {
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-        sqlite3_close(db);
-
-        return;
-    }
-
-    const char *sql_t = "SELECT * FROM dinosaur WHERE name LIKE '%s%%' ORDER BY name DESC LIMIT 21";
-    char sql[1024];
-    sqlite3_snprintf(1024, sql, sql_t, name);
+    sqlite3_snprintf(sizeof(sql), sql,
+            "SELECT * FROM dinosaur WHERE name LIKE '%s%%' ORDER BY name DESC LIMIT 21", name);
 
     sqlite3_stmt *stmt;
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    rc = sqlite3_prepare_v2(resp->db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK)
     {
-        printf("error: %s\n", sqlite3_errmsg(db));
-        return;
+        printf("error: %s\n", sqlite3_errmsg(resp->db));
+        return 1;
     }
-
-    struct dinosaur *d = NULL;
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
-    {
-        struct dinosaur *tmp = calloc(1, sizeof(struct dinosaur));
-        const char *id = sqlite3_column_text(stmt, 0);
-        const char *name = sqlite3_column_text(stmt, 1);
-        const char *desc = sqlite3_column_text(stmt, 2);
-        const char *img = sqlite3_column_text(stmt, 3);
-
-        tmp->id = calloc(strlen(id) + 1, sizeof(char));
-        memcpy(tmp->id, id, strlen(id));
-        tmp->name = calloc(strlen(name) + 1, sizeof(char));
-        memcpy(tmp->name, name, strlen(name));
-        tmp->desc = calloc(strlen(desc) + 1, sizeof(char));
-        memcpy(tmp->desc, desc, strlen(desc));
-        tmp->img = calloc(strlen(img) + 1, sizeof(char));
-        memcpy(tmp->img, img, strlen(img));
-
-        tmp->next = d;
-        d = tmp;
-    }
-
-    if (rc != SQLITE_DONE)
-    {
-        printf("error: %s\n", sqlite3_errmsg(db));
-    }
-
 
     TMPL_loop *loop = 0;
     TMPL_varlist *vl;
-    for (struct dinosaur *ptr = d; ptr; ptr = ptr->next)
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
     {
-        if (!ptr) break;
+        char desc_t[256] = {0x0};
+        strncpy(desc_t, sqlite3_column_text(stmt, 2), 250);
+        strcat(desc_t, "...");
 
-        char desc[256] = {0x0};
-        memcpy(desc, ptr->desc, min(250, strlen(ptr->desc)));
-        strcat(desc, "...");
+        vl = TMPL_add_var(0,
+                "id", sqlite3_column_text(stmt, 0),
+                "name", sqlite3_column_text(stmt, 1),
+                "desc", desc_t,
+                "img", sqlite3_column_text(stmt, 3), 0);
 
-        vl = TMPL_add_var(0, "id", ptr->id, "name", ptr->name, "desc", desc, "img", ptr->img, 0);
         loop = TMPL_add_varlist(loop, vl);
     }
     resp->TMPL_mainlist = TMPL_add_loop(resp->TMPL_mainlist, "dinosaurs", loop);
 
-    free_dinosaurs(d);
-
     sqlite3_finalize(stmt);
-    sqlite3_close(db);
+    return 0;
 }
 
-void dinosaurShowPage (Response *resp, Request *req)
+int dinosaurShowPage (Response *resp, Request *req)
 {
+    char sql[1024];
+    int rc;
+
     resp->TMPL_file = setPath("dinosaur/show.html");
 
-    sqlite3 *db;
-    int rc = sqlite3_open("test.db", &db);
-    if (rc != SQLITE_OK)
-    {
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-        sqlite3_close(db);
+    char *temp_id = getRouteParam(req, 3);
+    int id = atoi(temp_id);
+    free(temp_id);
 
-        return;
-    }
-
-    char *a = getRouteParam(req, 2);
-    a = a ? a : "";
-
-    const char *sql_t = "SELECT * FROM dinosaur INNER JOIN content on content.dinosaur_id = dinosaur.id WHERE dinosaur.id = '%s'"; 
-    char sql[1024];
-    sqlite3_snprintf(1024, sql, sql_t, a);
-
-    free(a);
+    sqlite3_snprintf(sizeof(sql), sql,
+            "SELECT * FROM dinosaur INNER JOIN content on content.dinosaur_id = dinosaur.id WHERE dinosaur.id = '%d'", id);
 
     sqlite3_stmt *stmt;
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    rc = sqlite3_prepare_v2(resp->db, sql, -1, &stmt, NULL);
     if (rc != SQLITE_OK)
     {
-        printf("error: %s\n", sqlite3_errmsg(db));
-        return;
+        printf("error: %s\n", sqlite3_errmsg(resp->db));
+        return 1;
     }
-
 
     TMPL_loop *loop = 0;
     TMPL_varlist *vl;
-
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_ROW)
+    if ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
     {
-        const char *id = sqlite3_column_text(stmt, 0);
-        const char *name = sqlite3_column_text(stmt, 1);
-        const char *desc = sqlite3_column_text(stmt, 2);
-        const char *img = sqlite3_column_text(stmt, 3);
+        resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist,
+                "id", sqlite3_column_text(stmt, 0),
+                "name", sqlite3_column_text(stmt, 1),
+                "desc", sqlite3_column_text(stmt, 2),
+                "img", sqlite3_column_text(stmt, 3), 0);
 
-        const char *sectId = sqlite3_column_text(stmt, 5);
-        const char *sectTitle = sqlite3_column_text(stmt, 6);
-        const char *sectText = sqlite3_column_text(stmt, 7);
+        vl = TMPL_add_var(0,
+                "sectId", sqlite3_column_text(stmt, 5),
+                "sectTitle", sqlite3_column_text(stmt, 6),
+                "sectText", sqlite3_column_text(stmt, 7), 0);
 
-        resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "id", id, "name", name, "desc", desc, "img", img, 0);
-        vl = TMPL_add_var(0, "sectId", sectId, "sectTitle", sectTitle, "sectText", sectText, 0);
         loop = TMPL_add_varlist(loop, vl);
-    }
 
-    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
-    {
-        const char *sectId = sqlite3_column_text(stmt, 5);
-        const char *sectTitle = sqlite3_column_text(stmt, 6);
-        const char *sectText = sqlite3_column_text(stmt, 7);
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
+        {
+            vl = TMPL_add_var(0,
+                    "sectId", sqlite3_column_text(stmt, 5),
+                    "sectTitle", sqlite3_column_text(stmt, 6),
+                    "sectText", sqlite3_column_text(stmt, 7), 0);
 
-        vl = TMPL_add_var(0, "sectId", sectId, "sectTitle", sectTitle, "sectText", sectText, 0);
-        loop = TMPL_add_varlist(loop, vl);
+            loop = TMPL_add_varlist(loop, vl);
+        }
     }
     resp->TMPL_mainlist = TMPL_add_loop(resp->TMPL_mainlist, "sections", loop);
+    sqlite3_finalize(stmt);
 
-    if (rc != SQLITE_DONE)
-        printf("error: %s\n", sqlite3_errmsg(db));
+    sqlite3_snprintf(sizeof(sql), sql,
+            "SELECT name, id, parent_id FROM dinosaur WHERE id = @id");
+
+    rc = sqlite3_prepare_v2(resp->db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK)
+    {
+        printf("error: %s\n", sqlite3_errmsg(resp->db));
+        return 1;
+    }
+
+    loop = 0;
+    while (1)
+    {
+        sqlite3_bind_int(stmt, 1, id);
+        sqlite3_step(stmt);
+
+        const char *name = sqlite3_column_text(stmt, 0);
+        const char *self_id = sqlite3_column_text(stmt, 1);
+        const char *parent_id = sqlite3_column_text(stmt, 2);
+
+        vl = TMPL_add_var(0,
+                "parent_name", name,
+                "parent_id", self_id, 0);
+
+        loop = TMPL_add_varlist(loop, vl);
+
+        if (parent_id == NULL) break;
+
+        id = atoi(parent_id);
+        sqlite3_reset(stmt);
+    }
+    resp->TMPL_mainlist = TMPL_add_loop(resp->TMPL_mainlist, "parents", loop);
 
     sqlite3_finalize(stmt);
-    sqlite3_close(db);
-
-    return;
+    return 0;
 }
