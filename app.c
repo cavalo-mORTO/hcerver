@@ -12,17 +12,8 @@
 
 int mapRoute(Request *req, Response *resp)
 {
-    /* if route is found return 0 */
+    /* if route is found return HTTP_OK */
     if (routeIs(req, "/"))
-        return indexPage(resp, req);
-
-    if (routeIs(req, "/hello"))
-        return helloPage(resp, req);
-
-    if (routeIsRegEx(req, "/hello/[0-9]*$"))
-        return helloPage(resp, req);
-
-    if (routeIsRegEx(req, "/hello/[0-9]*/show"))
         return indexPage(resp, req);
 
     if (routeIs(req, "/dinosaur"))
@@ -32,7 +23,7 @@ int mapRoute(Request *req, Response *resp)
         return dinosaurShowPage(resp, req);
 
     /* no route was found */
-    return 1;
+    return HTTP_NOTFOUND;
 }
 
 
@@ -41,7 +32,7 @@ char *handleRequest(char *raw_request)
     Response *resp = calloc(1, sizeof(Response));
     if (!resp) return NULL;
 
-    resp->status = HTTP_OK;
+    resp->status = SERVER_ERROR_CODE[HTTP_OK].status;
 
     /* open database conn */
     if (sqlite3_open(getenv("DATABASE_URL"), &resp->db) != SQLITE_OK)
@@ -61,8 +52,11 @@ char *handleRequest(char *raw_request)
     }
 
     /* if route does not exist what is being requested is a file */
-    if (mapRoute(req, resp) != 0)
+    unsigned err = mapRoute(req, resp);
+    if (err == HTTP_NOTFOUND)
         resp->TMPL_file = setPath(req->route);
+    else
+        addError(resp, err);
 
     renderContent(resp);
 

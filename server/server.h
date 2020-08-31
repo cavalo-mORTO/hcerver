@@ -1,14 +1,6 @@
 #define SERVER_NAME "The WebServer with Thick Thighs (づ｡◕‿‿◕｡)づ"
 
 #define HTTP_VER "1.1"
-#define HTTP_OK 200
-#define HTTP_NOTFOUND 404
-#define HTTP_FORBIDDEN 403
-#define HTTP_METHOD_NOT_ALLOWED 405
-#define HTTP_TIMEOUT 408
-#define HTTP_INTERNAL_SERVER_ERROR 500
-#define HTTP_NOT_IMPLEMENTED 501
-#define HTTP_SERVICE_UNAVAILABLE 503
 
 #define PUBLIC_GROUP "miguel"
 #define TEMPLATE_DIR "public/templates"
@@ -17,18 +9,32 @@
 
 typedef enum
 {
-    NO_FILE,
-    FORBIDDEN,
-    INTERNAL_ERROR,
-    METHOD_NOT_ALLOWED,
+    HTTP_OK,
+    HTTP_FORBIDDEN,
+    HTTP_NOTFOUND,
+    HTTP_METHOD_NOT_ALLOWED,
+    HTTP_INTERNAL_SERVER_ERROR,
+    HTTP_NOT_IMPLEMENTED,
+    HTTP_SERVICE_UNAVAILABLE,
+    HTTP_INSUFFICIENT_STORAGE,
 }
-SERVER_ERROR;
+SERVER_STATUS;
 
-static const char SERVER_ERROR_MSG[][128] = {
-    "The requested page couldn't be found!",
-    "The requested page is forbidden!",
-    "Internal server error!",
-    "Method not allowed!",
+struct error
+{
+    unsigned status;
+    char msg[256];
+};
+
+static const struct error SERVER_ERROR_CODE[] = {
+    { 200, "The request has succeeded." },
+    { 403, "The server understood the request but refuses to authorize it." },
+    { 404, "The origin server did not find a current representation for the target resource or is not willing to disclose that one exists." },
+    { 405, "The method received in the request-line is known by the origin server but not supported by the target resource." },
+    { 500, "The server encountered an unexpected condition that prevented it from fulfilling the request." },
+    { 501, "The server does not support the functionality required to fulfill the request." },
+    { 503, "The server is currently unable to handle the request due to a temporary overload or scheduled maintenance, which will likely be alleviated after some delay." },
+    { 507, "The method could not be performed on the resource because the server is unable to store the representation needed to successfully complete the request." },
 };
 
 
@@ -105,7 +111,6 @@ void addError(Response *resp, unsigned char err);
 void freeRequest(Request *req);
 void freeResponse(Response *resp);
 Request *parseRequest(char *raw);
-
 
 char *getRequestHeader(Request *req, char *header);
 char *getRequestGetField(Request *req, char *field);

@@ -25,7 +25,7 @@ int dinosaurIndexPage(Response *resp, Request *req)
     if (rc != SQLITE_OK)
     {
         printf("error: %s\n", sqlite3_errmsg(resp->db));
-        return 1;
+        return HTTP_INTERNAL_SERVER_ERROR;
     }
 
     TMPL_loop *loop = 0;
@@ -47,7 +47,7 @@ int dinosaurIndexPage(Response *resp, Request *req)
     resp->TMPL_mainlist = TMPL_add_loop(resp->TMPL_mainlist, "dinosaurs", loop);
 
     sqlite3_finalize(stmt);
-    return 0;
+    return HTTP_OK;
 }
 
 int dinosaurShowPage (Response *resp, Request *req)
@@ -57,7 +57,7 @@ int dinosaurShowPage (Response *resp, Request *req)
 
     resp->TMPL_file = setPath("dinosaur/show.html");
 
-    char *temp_id = getRouteParam(req, 3);
+    char *temp_id = getRouteParam(req, 2);
     int id = atoi(temp_id);
     free(temp_id);
 
@@ -69,7 +69,7 @@ int dinosaurShowPage (Response *resp, Request *req)
     if (rc != SQLITE_OK)
     {
         printf("error: %s\n", sqlite3_errmsg(resp->db));
-        return 1;
+        return HTTP_INTERNAL_SERVER_ERROR;
     }
 
     TMPL_loop *loop = 0;
@@ -109,7 +109,7 @@ int dinosaurShowPage (Response *resp, Request *req)
     if (rc != SQLITE_OK)
     {
         printf("error: %s\n", sqlite3_errmsg(resp->db));
-        return 1;
+        return HTTP_INTERNAL_SERVER_ERROR;
     }
 
     loop = 0;
@@ -136,5 +136,5 @@ int dinosaurShowPage (Response *resp, Request *req)
     resp->TMPL_mainlist = TMPL_add_loop(resp->TMPL_mainlist, "parents", loop);
 
     sqlite3_finalize(stmt);
-    return 0;
+    return HTTP_OK;
 }
