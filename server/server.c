@@ -20,6 +20,8 @@ static int min ( int a, int b ) { return a < b ? a : b; }
 
 static char *getDictValue(Dict_t *d, char *key)
 {
+    if (key == NULL) return NULL;
+
     char *value = NULL;
     for (; d != NULL; d = d->next)
     {
@@ -36,17 +38,15 @@ static char *getDictValue(Dict_t *d, char *key)
 static char *getMultiFormData(MultiForm_t *m, char *field)
 {
     char *data = NULL;
-    char *name;
     for (; m != NULL; m = m->next)
     {
-        name = getDictValue(m->head, "name");
+        char *name = getDictValue(m->head, "name");
         if (name != NULL && strcmp(name, field) == 0)
         {
             data = m->data;
             break;
         }
     }
-
     return data;
 }
 
@@ -67,8 +67,11 @@ char *getRequestPostField(Request *req, char *field)
     if (req->method != POST) return NULL;
 
     char *type = getRequestHeader(req, "Content-Type");
+
     if (type != NULL && strncmp(type, "multipart/form-data", 19) == 0)
+    {
         return getMultiFormData(req->multi, field);
+    }
 
     return getDictValue(req->form, field);
 }
@@ -104,22 +107,23 @@ static char *makeHeader(Response *resp)
     size_t head_len = snprintf(NULL, 0,
             "HTTP/%s %d\n"
             "Content-Type: %s\n"
-            "Content-Length: %ld\n"
+            "Content-Length: %lu\n"
             "Server: %s\n"
             "Date: %s\n",
             HTTP_VER, resp->status,
             mime,
             resp->content_lenght,
             SERVER_NAME,
-            ctime(&now));
+            ctime(&now)) + 1;
     
-    char *header = calloc(head_len + 1, sizeof(char));
+    char *header = calloc(head_len, sizeof(char));
     if (!header) return NULL;
 
-    sprintf(header,
+    snprintf(header,
+            head_len,
             "HTTP/%s %d\n"
             "Content-Type: %s\n"
-            "Content-Length: %ld\n"
+            "Content-Length: %lu\n"
             "Server: %s\n"
             "Date: %s\n",
             HTTP_VER, resp->status,
@@ -146,27 +150,26 @@ void renderContent(Response *resp)
             break;
     }
 
-    TMPL_varlist *vl;
-    TMPL_loop *loop;
-
-    loop = 0;
     if (resp->errors)
     {
+        TMPL_varlist *vl;
+        TMPL_loop *loop = 0;
+
         free(resp->TMPL_file);
         resp->TMPL_file = setPath("error.html"); 
         TMPL_free_varlist(resp->TMPL_mainlist);
 
         for (Error_t *e = resp->errors; e; e = e->next)
         {
-            char err[12] = {0x0};
-            sprintf(err, "%d", e->error);
+            char err[12];
+            snprintf(err, sizeof(err), "%d", e->error);
             vl = TMPL_add_var(0, "err", err, "msg", e->msg, 0);
             loop = TMPL_add_varlist(loop, vl);
         }
         resp->TMPL_mainlist = TMPL_add_loop(0, "errors", loop);
 
-        char status[12] = {0x0};
-        sprintf(status, "%d", resp->status);
+        char status[12];
+        snprintf(status, sizeof(status), "%d", resp->status);
         resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
 
@@ -527,10 +530,10 @@ char *setPath(char *fname)
         dir = CSS_DIR;
 
     char *fmt = fname[0] == '/' ? "%s%s" : "%s/%s";
-    size_t len = snprintf(NULL, 0, fmt, dir, fname);
+    size_t len = snprintf(NULL, 0, fmt, dir, fname) + 1;
 
-    char *path = calloc(len + 1, sizeof(char));
-    sprintf(path, fmt, dir, fname);
+    char *path = calloc(len, sizeof(char));
+    snprintf(path, len, fmt, dir, fname);
     
     return path;
 }

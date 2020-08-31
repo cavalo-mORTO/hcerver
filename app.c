@@ -39,13 +39,9 @@ int mapRoute(Request *req, Response *resp)
 char *handleRequest(char *raw_request)
 {
     Response *resp = calloc(1, sizeof(Response));
-    if (!resp) 
-    {
-        freeResponse(resp);
-        return NULL;
-    }
+    if (!resp) return NULL;
+
     resp->status = HTTP_OK;
-    resp->errors = NULL;
 
     /* open database conn */
     if (sqlite3_open(getenv("DATABASE_URL"), &resp->db) != SQLITE_OK)
@@ -61,7 +57,6 @@ char *handleRequest(char *raw_request)
     if (!req) 
     {
         freeResponse(resp);
-        freeRequest(req);
         return NULL;
     }
 
@@ -71,11 +66,11 @@ char *handleRequest(char *raw_request)
 
     renderContent(resp);
 
-    size_t len = snprintf(NULL, 0, "%s\n%s", resp->header, resp->content);
+    size_t len = snprintf(NULL, 0, "%s\n%s", resp->header, resp->content) + 1;
 
     /* concat response head with the body */
-    char *response = calloc(len + 1, sizeof(char));
-    sprintf(response, "%s\n%s", resp->header, resp->content);
+    char *response = calloc(len, sizeof(char));
+    snprintf(response, len, "%s\n%s", resp->header, resp->content);
 
     sqlite3_close(resp->db);
 
