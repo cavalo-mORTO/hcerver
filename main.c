@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <sqlite3.h>
 
 #include "libctemplate/ctemplate.h"
 #include "server/server.h"

@@ -8,7 +8,7 @@
 #include <sys/types.h>
 #include <grp.h>
 #include <regex.h>
-
+#include <sqlite3.h>
 
 #include "../libctemplate/ctemplate.h"
 #include "server.h"
@@ -20,6 +20,8 @@ static int min ( int a, int b ) { return a < b ? a : b; }
 
 static char *getDictValue(Dict_t *d, char *key)
 {
+    if (key == NULL) return NULL;
+
     char *value = NULL;
     for (; d != NULL; d = d->next)
     {
@@ -36,17 +38,15 @@ static char *getDictValue(Dict_t *d, char *key)
 static char *getMultiFormData(MultiForm_t *m, char *field)
 {
     char *data = NULL;
-    char *name;
     for (; m != NULL; m = m->next)
     {
-        name = getDictValue(m->head, "name");
+        char *name = getDictValue(m->head, "name");
         if (name != NULL && strcmp(name, field) == 0)
         {
             data = m->data;
             break;
         }
     }
-
     return data;
 }
 
@@ -67,8 +67,11 @@ char *getRequestPostField(Request *req, char *field)
     if (req->method != POST) return NULL;
 
     char *type = getRequestHeader(req, "Content-Type");
+
     if (type != NULL && strncmp(type, "multipart/form-data", 19) == 0)
+    {
         return getMultiFormData(req->multi, field);
+    }
 
     return getDictValue(req->form, field);
 }
@@ -104,22 +107,23 @@ static char *makeHeader(Response *resp)
     size_t head_len = snprintf(NULL, 0,
             "HTTP/%s %d\n"
             "Content-Type: %s\n"
-            "Content-Length: %ld\n"
+            "Content-Length: %lu\n"
             "Server: %s\n"
             "Date: %s\n",
             HTTP_VER, resp->status,
             mime,
             resp->content_lenght,
             SERVER_NAME,
-            ctime(&now));
+            ctime(&now)) + 1;
     
-    char *header = calloc(head_len + 1, sizeof(char));
+    char *header = calloc(head_len, sizeof(char));
     if (!header) return NULL;
 
-    sprintf(header,
+    snprintf(header,
+            head_len,
             "HTTP/%s %d\n"
             "Content-Type: %s\n"
-            "Content-Length: %ld\n"
+            "Content-Length: %lu\n"
             "Server: %s\n"
             "Date: %s\n",
             HTTP_VER, resp->status,
@@ -134,39 +138,22 @@ static char *makeHeader(Response *resp)
 
 void renderContent(Response *resp)
 {
-    switch(readFileOK(resp))
-    {
-        case -1:
-            addError(resp, NO_FILE);
-            resp->status = HTTP_NOTFOUND;
-            break;
-        case 1:
-            addError(resp, FORBIDDEN);
-            resp->status = HTTP_FORBIDDEN;
-            break;
-    }
+    addError(resp, readFileOK(resp));
 
-    TMPL_varlist *vl;
-    TMPL_loop *loop;
-
-    loop = 0;
-    if (resp->errors)
+    if (resp->status != SERVER_ERROR_CODE[HTTP_OK].status)
     {
         free(resp->TMPL_file);
-        resp->TMPL_file = setPath("error.html"); 
         TMPL_free_varlist(resp->TMPL_mainlist);
 
+        TMPL_loop *loop = 0;
         for (Error_t *e = resp->errors; e; e = e->next)
-        {
-            char err[12] = {0x0};
-            sprintf(err, "%d", e->error);
-            vl = TMPL_add_var(0, "err", err, "msg", e->msg, 0);
-            loop = TMPL_add_varlist(loop, vl);
-        }
+            loop = TMPL_add_varlist(loop, TMPL_add_var(0, "msg", e->msg, 0));
+
+        resp->TMPL_file = setPath("error.html"); 
         resp->TMPL_mainlist = TMPL_add_loop(0, "errors", loop);
 
-        char status[12] = {0x0};
-        sprintf(status, "%d", resp->status);
+        char status[12];
+        snprintf(status, sizeof(status), "%d", resp->status);
         resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
 
@@ -180,16 +167,15 @@ void renderContent(Response *resp)
 
 void addError(Response *resp, unsigned char err)
 {
+    if (err == HTTP_OK) return;
+
     Error_t *e;
     for (e = resp->errors; e != NULL; e = e->next)
-    {
-        if (e->error == err)
-            return;
-    }
+        if (e->error == err) return;
 
     e = calloc(1, sizeof(Error_t));
     e->error = err;
-    e->msg = SERVER_ERROR_MSG[err];
+    e->msg = SERVER_ERROR_CODE[err].msg;
     e->next = NULL;
 
     Error_t *p = resp->errors;
@@ -200,6 +186,8 @@ void addError(Response *resp, unsigned char err)
         while (p->next != NULL) { p = p->next; }
         p->next = e;
     }
+
+    resp->status = SERVER_ERROR_CODE[err].status;
 }
 
 
@@ -468,25 +456,24 @@ static int checkFile(const char *fname, char permission)
 {
     struct stat st;
     struct group *g;
-    int forbidden = 1;
 
     /* file does not exist */
-    if (lstat(fname, &st) < 0) return -1;
+    if (lstat(fname, &st) < 0) return HTTP_NOTFOUND;
 
     /* group does not exist */
-    if ((g = getgrnam(PUBLIC_GROUP)) == NULL) return forbidden;
+    if ((g = getgrnam(PUBLIC_GROUP)) == NULL) return HTTP_FORBIDDEN;
 
     /* file does not belong to public group */
-    if (g->gr_gid != st.st_gid) return forbidden;
+    if (g->gr_gid != st.st_gid) return HTTP_FORBIDDEN;
 
     switch(permission)
     {
-        case 'r': if ((st.st_mode & S_IRUSR) && (st.st_mode & S_IRGRP)) forbidden = 0; break;
-        case 'w': if ((st.st_mode & S_IWUSR) && (st.st_mode & S_IWGRP)) forbidden = 0; break;
-        case 'x': if ((st.st_mode & S_IXUSR) && (st.st_mode & S_IXGRP)) forbidden = 0; break;
+        case 'r': if ((st.st_mode & S_IRUSR) && (st.st_mode & S_IRGRP)) return HTTP_OK;  
+        case 'w': if ((st.st_mode & S_IWUSR) && (st.st_mode & S_IWGRP)) return HTTP_OK;
+        case 'x': if ((st.st_mode & S_IXUSR) && (st.st_mode & S_IXGRP)) return HTTP_OK;
     }
 
-    return forbidden;
+    return HTTP_FORBIDDEN;
 }
 
 int readFileOK(Response *resp)
@@ -527,35 +514,34 @@ char *setPath(char *fname)
         dir = CSS_DIR;
 
     char *fmt = fname[0] == '/' ? "%s%s" : "%s/%s";
-    size_t len = snprintf(NULL, 0, fmt, dir, fname);
+    size_t len = snprintf(NULL, 0, fmt, dir, fname) + 1;
 
-    char *path = calloc(len + 1, sizeof(char));
-    sprintf(path, fmt, dir, fname);
+    char *path = calloc(len, sizeof(char));
+    snprintf(path, len, fmt, dir, fname);
     
     return path;
 }
 
 
-
-
 char *getRouteParam(Request *req, unsigned short pos)
 {
-    char *ptr = NULL;
-    unsigned short i = 0;
+    char *ptr = req->route;
+    unsigned short i = 0; /* position is zero indexed */
 
-    ptr = req->route;
-    while (i < pos)
+    while (i <= pos)
     {
-        i++;
-        ptr = strchr(ptr, '/') + 1;
+        if ((ptr = strchr(ptr, '/')) == 0)
+            return NULL;
 
-        if (ptr == NULL) break;
+        i++; /* move position */
+        ptr++; /* skip "/" */
     }
     char *param = ptr;
     char *param_end = strchr(param, '/') ? strchr(param, '/') : strchr(param, '\0');
 
     return strndup(param, param_end - param);
 }
+
 
 static int regexMatch(char *matchStr, char *regexStr)
 {
