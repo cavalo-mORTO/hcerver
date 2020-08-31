@@ -38,21 +38,13 @@ static const struct error SERVER_ERROR_CODE[] = {
 };
 
 
-typedef struct Error
-{
-    unsigned char error;
-    const char *msg;
-    struct Error *next;
-}
-Error_t;
-
 typedef struct
 {
     size_t content_lenght;
     unsigned short status;
     TMPL_varlist *TMPL_mainlist;
     char *TMPL_file;
-    Error_t *errors;
+    unsigned *errors;
     char *header;
     char *content;
 
@@ -119,3 +111,4 @@ char *getRouteParam(Request *req, unsigned short pos);
 char *setPath(char *fname);
 int routeIs(Request *req, char *route);
 int routeIsRegEx(Request *req, char *regex);
+Response *initResponse();

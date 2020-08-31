@@ -1,10 +1,18 @@
 <html>
     <head>
-        <title>ERROR <TMPL_VAR name = "status">!</title>
+		<link rel="stylesheet" href="/error.css">
+        <title>Error <TMPL_VAR name = "status">!</title>
     </head>
     <body>
-        <TMPL_LOOP name = "errors">
-            <p>ERROR <TMPL_VAR name = "err">: <TMPL_VAR name = "msg"></p>
-        </TMPL_LOOP>
+        <div class="wrapper">
+            <div class="box">
+                <h1><TMPL_VAR name = "status"></h1>
+                <TMPL_LOOP name = "errors">
+                    <p class="small"><TMPL_VAR name = "msg"></p>
+                </TMPL_LOOP>
+                <p>&#58;&#40;</p>
+                <p><a href="/">Let me try again!</a></p>
+            </div>
+        </div>
     </body>
 </html>

@@ -27,12 +27,11 @@ int mapRoute(Request *req, Response *resp)
 }
 
 
+
 char *handleRequest(char *raw_request)
 {
-    Response *resp = calloc(1, sizeof(Response));
+    Response *resp = initResponse();
     if (!resp) return NULL;
-
-    resp->status = SERVER_ERROR_CODE[HTTP_OK].status;
 
     /* open database conn */
     if (sqlite3_open(getenv("DATABASE_URL"), &resp->db) != SQLITE_OK)

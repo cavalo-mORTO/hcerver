@@ -17,6 +17,22 @@
 static int max ( int a, int b ) { return a > b ? a : b; }
 static int min ( int a, int b ) { return a < b ? a : b; }
 
+Response *initResponse()
+{
+    Response *resp = calloc(1, sizeof(Response));
+    if (!resp) return NULL;
+
+    resp->status = SERVER_ERROR_CODE[HTTP_OK].status;
+
+    resp->errors = calloc(128, sizeof(unsigned));
+    if (!resp->errors) 
+    {
+        freeResponse(resp);
+        return NULL;
+    }
+
+    return resp;
+}
 
 static char *getDictValue(Dict_t *d, char *key)
 {
@@ -69,9 +85,7 @@ char *getRequestPostField(Request *req, char *field)
     char *type = getRequestHeader(req, "Content-Type");
 
     if (type != NULL && strncmp(type, "multipart/form-data", 19) == 0)
-    {
         return getMultiFormData(req->multi, field);
-    }
 
     return getDictValue(req->form, field);
 }
@@ -146,8 +160,8 @@ void renderContent(Response *resp)
         TMPL_free_varlist(resp->TMPL_mainlist);
 
         TMPL_loop *loop = 0;
-        for (Error_t *e = resp->errors; e; e = e->next)
-            loop = TMPL_add_varlist(loop, TMPL_add_var(0, "msg", e->msg, 0));
+        for (unsigned i = 0; resp->errors[i] != 0; i++)
+            loop = TMPL_add_varlist(loop, TMPL_add_var(0, "msg", SERVER_ERROR_CODE[resp->errors[i]].msg, 0));
 
         resp->TMPL_file = setPath("error.html"); 
         resp->TMPL_mainlist = TMPL_add_loop(0, "errors", loop);
@@ -169,24 +183,17 @@ void addError(Response *resp, unsigned char err)
 {
     if (err == HTTP_OK) return;
 
-    Error_t *e;
-    for (e = resp->errors; e != NULL; e = e->next)
-        if (e->error == err) return;
-
-    e = calloc(1, sizeof(Error_t));
-    e->error = err;
-    e->msg = SERVER_ERROR_CODE[err].msg;
-    e->next = NULL;
-
-    Error_t *p = resp->errors;
-    if (p == NULL)
-        resp->errors = e;
-    else
+    unsigned i = 0;
+    for (; i < sizeof(resp->errors); i++)
     {
-        while (p->next != NULL) { p = p->next; }
-        p->next = e;
+        /* if error already exists quit */
+        if (resp->errors[i] == err) return;
+
+        /* if no error is found add to it */
+        if (resp->errors[i] == 0) break;
     }
 
+    resp->errors[i] = err;
     resp->status = SERVER_ERROR_CODE[err].status;
 }
 
@@ -200,15 +207,6 @@ static void freeDict(Dict_t *d)
     free(d->value);
     free(d);
 }
-
-static void freeError(Error_t *e)
-{
-    if (e == NULL) return;
-
-    freeError(e->next);
-    free(e);
-}
-
 
 static void freeMultiForm(MultiForm_t *m)
 {
@@ -234,7 +232,6 @@ void freeRequest(Request *req)
 
 void freeResponse(Response *resp)
 {
-    freeError(resp->errors);
     free(resp->header);
     free(resp->content);
     TMPL_free_varlist(resp->TMPL_mainlist);
@@ -337,13 +334,7 @@ Request *parseRequest(char *raw)
     req->headers = header;
     raw += 2; // move past <CR><LF>
 
-    size_t body_len = strlen(raw);
-    req->body = calloc(body_len + 1, sizeof(char));
-    if (!req->body) {
-        freeRequest(req);
-        return NULL;
-    }
-    memcpy(req->body, raw, body_len);
+    req->body = strdup(raw);
 
     if (req->method != POST)
         return req;
