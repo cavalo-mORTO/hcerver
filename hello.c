@@ -25,7 +25,12 @@ int helloPage(Response *resp, Request *req)
 
     TMPL_loop *loop = 0;
     TMPL_varlist *vl;
-    for (int i = atoi(getRouteParam(req, 2) ? getRouteParam(req, 2) : "34"); i > 0; i--)
+
+    char *n = getRouteParam(req, 1);
+    int num = atoi(n ? n : "3");
+    free(n);
+
+    for (int i = num; i > 0; i--)
     {
         vl = TMPL_add_var(0, "hello", "Hello world!",0);
         loop = TMPL_add_varlist(loop, vl);

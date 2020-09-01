@@ -283,7 +283,7 @@ int main (int argc, char *argv[])
             break;
           }
 
-          strncat(request, buffer, len);
+          strcat(request, buffer);
           if (len < sizeof(buffer) - 1)
           {
               printf("  Request has been received in full\n");

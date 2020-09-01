@@ -22,11 +22,11 @@ SERVER_STATUS;
 
 struct error
 {
-    unsigned status;
+    unsigned short status;
     char msg[256];
 };
 
-static const struct error SERVER_ERROR_CODE[] = {
+static const struct error SERVER_ERROR[] = {
     { 200, "The request has succeeded." },
     { 403, "The server understood the request but refuses to authorize it." },
     { 404, "The origin server did not find a current representation for the target resource or is not willing to disclose that one exists." },
@@ -40,13 +40,23 @@ static const struct error SERVER_ERROR_CODE[] = {
 
 typedef struct
 {
-    size_t content_lenght;
     unsigned short status;
     TMPL_varlist *TMPL_mainlist;
     char *TMPL_file;
-    unsigned *errors;
+
+    struct {
+        unsigned short *arr;
+        size_t size;
+    }
+    errors;
+
     char *header;
-    char *content;
+
+    struct {
+        char *buf;
+        size_t buflen;
+    }
+    content;
 
     sqlite3 *db;
 }
@@ -94,12 +104,12 @@ typedef struct
 Request;
 
 
-int readFileOK(Response *resp);
-int writeFileOK(Response *resp);
-int execFileOK(Response *resp);
+unsigned short readFileOK(Response *resp);
+unsigned short writeFileOK(Response *resp);
+unsigned short execFileOK(Response *resp);
 
 void renderContent(Response *resp);
-void addError(Response *resp, unsigned char err);
+void addError(Response *resp, unsigned short err);
 void freeRequest(Request *req);
 void freeResponse(Response *resp);
 Request *parseRequest(char *raw);
