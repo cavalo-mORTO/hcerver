@@ -27,6 +27,7 @@ int main (int argc, char *argv[])
   int    close_conn;
   char   buffer[256];
   char   request[8096];
+  size_t rlen;
   struct sockaddr_in6 addr;
   int    timeout;
   struct pollfd fds[200];
@@ -235,7 +236,7 @@ int main (int argc, char *argv[])
         /*******************************************************/
 
         memset(request, 0, sizeof(request));
-        size_t requestLen = 0;
+        rlen = 0;
 
         do
         {
@@ -274,15 +275,15 @@ int main (int argc, char *argv[])
           len = rc;
           printf("  %d bytes received\n", len);
 
-          requestLen += len;
-          if (requestLen >= sizeof(request))
+          rlen += len;
+          if (rlen >= sizeof(request))
           {
             printf("  request body too long\n");
             close_conn = TRUE;
             break;
           }
 
-          strncat(request, buffer, len);
+          strcat(request, buffer);
           if (len < sizeof(buffer) - 1)
           {
               printf("  Request has been received in full\n");

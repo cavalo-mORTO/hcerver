@@ -134,8 +134,13 @@ struct tagnode {
 struct template {
     const char *filename;  /* name of template file */
     const char *tmplstr;   /* contents of template file */
-    char **out;            /* template output buffer pointer */
-    size_t out_size;       /* template output buffer size */
+
+    struct {
+        char **buffer;        /* template output buffer pointer */
+        size_t bufsize;       /* template output buffer size */
+    }
+    out;
+
     FILE *errout;          /* error output file pointer */
     tagnode *roottag;      /* root of parse tree */
     const TMPL_fmtlist
@@ -241,7 +246,7 @@ myrealloc(void *ptr, size_t new_len, size_t old_len, size_t size) {
 
 static template *
 newtemplate(const char *filename, const char *tmplstr,
-    const TMPL_fmtlist *fmtlist, char **out, size_t out_size, FILE *errout)
+    const TMPL_fmtlist *fmtlist, char **buffer, size_t bufsize, FILE *errout)
 {
     template *t;
     FILE *fp;
@@ -285,8 +290,8 @@ newtemplate(const char *filename, const char *tmplstr,
     t->fmtlist = fmtlist;
     t->scanptr = t->tmplstr;
     t->roottag = t->curtag = t->nexttag = 0;
-    t->out = out;
-    t->out_size = out_size;
+    t->out.buffer = buffer;
+    t->out.bufsize = bufsize;
     t->errout = errout;
     t->linenum = 1;
     t->error = 0;
@@ -1089,16 +1094,16 @@ is_true(const tagnode *iftag, const TMPL_varlist *varlist) {
  */
 
 static void
-write_text(const char *p, int len, char **out, size_t *out_size) {
+write_text(const char *p, int len, char **buffer, size_t *bufsize) {
     int i, k;
 
-    size_t old_len = strlen(*out);
+    size_t old_len = strlen(*buffer);
     size_t new_len = old_len + len + 1;
 
-    if (new_len >= *out_size)
+    if (new_len >= *bufsize)
     {
-        *out_size = new_len * 2;
-        *out = myrealloc(*out, *out_size, old_len, sizeof(char));
+        *bufsize = new_len * 2;
+        *buffer = myrealloc(*buffer, *bufsize, old_len, sizeof(char));
     }
 
     for (i = 0; i < len; i++) {
@@ -1123,7 +1128,7 @@ write_text(const char *p, int len, char **out, size_t *out_size) {
                 }
             }
         }
-        (*out)[old_len + i] = p[i];
+        (*buffer)[old_len + i] = p[i];
     }
 }
 
@@ -1177,7 +1182,7 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
     switch(tag->kind) {
 
     case tag_text:
-        write_text(tag->tag.text.start, tag->tag.text.len, t->out, &t->out_size);
+        write_text(tag->tag.text.start, tag->tag.text.len, t->out.buffer, &t->out.bufsize);
         break;
 
     case tag_var:
@@ -1189,19 +1194,19 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
 
         /* Use the tag's format function or else just use fputs() */
 
-        size_t old_len = strlen(*t->out);
+        size_t old_len = strlen(*t->out.buffer);
         size_t new_len = old_len + strlen(value) + 1;
-        if (new_len >= t->out_size)
+        if (new_len >= t->out.bufsize)
         {
-            t->out_size = new_len * 2;
-            *t->out = myrealloc(*t->out, t->out_size, old_len, sizeof(char));
+            t->out.bufsize = new_len * 2;
+            *t->out.buffer = myrealloc(*t->out.buffer, t->out.bufsize, old_len, sizeof(char));
         }
 
         if (tag->tag.var.fmtfunc != 0) {
-            tag->tag.var.fmtfunc(value, *t->out);
+            tag->tag.var.fmtfunc(value, *t->out.buffer);
         }
         else {
-            strcat(*t->out, value);
+            strcat(*t->out.buffer, value);
         }
         break;
 
@@ -1267,7 +1272,7 @@ walk(template *t, tagnode *tag, const TMPL_varlist *varlist) {
         if ((t2 = tag->tag.include.tmpl) == 0) {
             newfile = newfilename(tag->tag.include.filename, t->filename);
             t2 = newtemplate(newfile, 0, t->fmtlist,
-                t->out, t->out_size, t->errout);
+                t->out.buffer, t->out.bufsize, t->errout);
             if (t2 == 0) {
                 free((void *) newfile);
                 t->error = 1;
@@ -1495,13 +1500,13 @@ TMPL_free_fmtlist(TMPL_fmtlist *fmtlist) {
 int
 TMPL_write(const char *filename, const char *tmplstr,
     const TMPL_fmtlist *fmtlist, const TMPL_varlist *varlist,
-    char **out, size_t out_sz, FILE *errout)
+    char **buffer, size_t bufsize, FILE *errout)
 {
     int ret;
     template *t;
 
 
-    if ((t = newtemplate(filename, tmplstr, fmtlist, out, out_sz, errout)) == 0) {
+    if ((t = newtemplate(filename, tmplstr, fmtlist, buffer, bufsize, errout)) == 0) {
         return -1;
     }
     t->roottag = parselist(t, 0);

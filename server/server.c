@@ -17,6 +17,33 @@
 static int max ( int a, int b ) { return a > b ? a : b; }
 static int min ( int a, int b ) { return a < b ? a : b; }
 
+Response *initResponse()
+{
+    Response *resp = calloc(1, sizeof(Response));
+    if (!resp) return NULL;
+
+    resp->status = SERVER_ERROR[HTTP_OK].status;
+
+    /* set up error array */
+    resp->errors.size = 128;
+    if ((resp->errors.arr = calloc(resp->errors.size, sizeof(unsigned short))) == 0) 
+    {
+        freeResponse(resp);
+        return NULL;
+    }
+
+    /* open database conn */
+    if (sqlite3_open(getenv("DATABASE_URL"), &resp->db) != SQLITE_OK)
+    {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(resp->db));
+        sqlite3_close(resp->db);
+
+        freeResponse(resp);
+        return NULL;
+    }
+
+    return resp;
+}
 
 static char *getDictValue(Dict_t *d, char *key)
 {
@@ -69,9 +96,7 @@ char *getRequestPostField(Request *req, char *field)
     char *type = getRequestHeader(req, "Content-Type");
 
     if (type != NULL && strncmp(type, "multipart/form-data", 19) == 0)
-    {
         return getMultiFormData(req->multi, field);
-    }
 
     return getDictValue(req->form, field);
 }
@@ -112,7 +137,7 @@ static char *makeHeader(Response *resp)
             "Date: %s\n",
             HTTP_VER, resp->status,
             mime,
-            resp->content_lenght,
+            resp->content.buflen,
             SERVER_NAME,
             ctime(&now)) + 1;
     
@@ -128,7 +153,7 @@ static char *makeHeader(Response *resp)
             "Date: %s\n",
             HTTP_VER, resp->status,
             mime,
-            resp->content_lenght,
+            resp->content.buflen,
             SERVER_NAME,
             ctime(&now));
 
@@ -140,14 +165,14 @@ void renderContent(Response *resp)
 {
     addError(resp, readFileOK(resp));
 
-    if (resp->status != SERVER_ERROR_CODE[HTTP_OK].status)
+    if (resp->status != SERVER_ERROR[HTTP_OK].status)
     {
         free(resp->TMPL_file);
         TMPL_free_varlist(resp->TMPL_mainlist);
 
         TMPL_loop *loop = 0;
-        for (Error_t *e = resp->errors; e; e = e->next)
-            loop = TMPL_add_varlist(loop, TMPL_add_var(0, "msg", e->msg, 0));
+        for (unsigned i = 0; resp->errors.arr[i] != 0; i++)
+            loop = TMPL_add_varlist(loop, TMPL_add_var(0, "msg", SERVER_ERROR[resp->errors.arr[i]].msg, 0));
 
         resp->TMPL_file = setPath("error.html"); 
         resp->TMPL_mainlist = TMPL_add_loop(0, "errors", loop);
@@ -157,37 +182,30 @@ void renderContent(Response *resp)
         resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, "status", status, 0);
     }
 
-    resp->content = calloc(4096, sizeof(char));
-    TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content, 4096, stderr);
-    resp->content_lenght = strlen(resp->content);
+    resp->content.buf = calloc(4096, sizeof(char));
+    TMPL_write(resp->TMPL_file, 0, 0, resp->TMPL_mainlist, &resp->content.buf, 4096, stderr);
+    resp->content.buflen = strlen(resp->content.buf);
 
     resp->header = makeHeader(resp);
 }
 
 
-void addError(Response *resp, unsigned char err)
+void addError(Response *resp, unsigned short err)
 {
     if (err == HTTP_OK) return;
 
-    Error_t *e;
-    for (e = resp->errors; e != NULL; e = e->next)
-        if (e->error == err) return;
-
-    e = calloc(1, sizeof(Error_t));
-    e->error = err;
-    e->msg = SERVER_ERROR_CODE[err].msg;
-    e->next = NULL;
-
-    Error_t *p = resp->errors;
-    if (p == NULL)
-        resp->errors = e;
-    else
+    unsigned i = 0;
+    for (; i < resp->errors.size; i++)
     {
-        while (p->next != NULL) { p = p->next; }
-        p->next = e;
+        /* if error already exists quit */
+        if (resp->errors.arr[i] == err) return;
+
+        /* if no error is found add to it */
+        if (resp->errors.arr[i] == 0) break;
     }
 
-    resp->status = SERVER_ERROR_CODE[err].status;
+    resp->errors.arr[i] = err;
+    resp->status = SERVER_ERROR[err].status;
 }
 
 
@@ -200,15 +218,6 @@ static void freeDict(Dict_t *d)
     free(d->value);
     free(d);
 }
-
-static void freeError(Error_t *e)
-{
-    if (e == NULL) return;
-
-    freeError(e->next);
-    free(e);
-}
-
 
 static void freeMultiForm(MultiForm_t *m)
 {
@@ -234,11 +243,12 @@ void freeRequest(Request *req)
 
 void freeResponse(Response *resp)
 {
-    freeError(resp->errors);
+    free(resp->errors.arr);
     free(resp->header);
-    free(resp->content);
+    free(resp->content.buf);
     TMPL_free_varlist(resp->TMPL_mainlist);
     free(resp->TMPL_file);
+    sqlite3_close(resp->db);
     free(resp);
 }
 
@@ -337,13 +347,7 @@ Request *parseRequest(char *raw)
     req->headers = header;
     raw += 2; // move past <CR><LF>
 
-    size_t body_len = strlen(raw);
-    req->body = calloc(body_len + 1, sizeof(char));
-    if (!req->body) {
-        freeRequest(req);
-        return NULL;
-    }
-    memcpy(req->body, raw, body_len);
+    req->body = strdup(raw);
 
     if (req->method != POST)
         return req;
@@ -452,7 +456,7 @@ Request *parseRequest(char *raw)
 }
 
 
-static int checkFile(const char *fname, char permission)
+static unsigned short checkFile(const char *fname, char permission)
 {
     struct stat st;
     struct group *g;
@@ -476,27 +480,26 @@ static int checkFile(const char *fname, char permission)
     return HTTP_FORBIDDEN;
 }
 
-int readFileOK(Response *resp)
+unsigned short readFileOK(Response *resp)
 {
     const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
 
     return checkFile(fname, 'r');
 }
 
-int writeFileOK(Response *resp)
+unsigned short writeFileOK(Response *resp)
 {
     const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
 
     return checkFile(fname, 'w');
 }
 
-int execFileOK(Response *resp)
+unsigned short execFileOK(Response *resp)
 {
     const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
 
     return checkFile(fname, 'x');
 }
-
 
 
 char *setPath(char *fname)

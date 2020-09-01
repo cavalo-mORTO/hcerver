@@ -29,20 +29,8 @@ int mapRoute(Request *req, Response *resp)
 
 char *handleRequest(char *raw_request)
 {
-    Response *resp = calloc(1, sizeof(Response));
+    Response *resp = initResponse();
     if (!resp) return NULL;
-
-    resp->status = SERVER_ERROR_CODE[HTTP_OK].status;
-
-    /* open database conn */
-    if (sqlite3_open(getenv("DATABASE_URL"), &resp->db) != SQLITE_OK)
-    {
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(resp->db));
-        sqlite3_close(resp->db);
-
-        freeResponse(resp);
-        return NULL;
-    }
 
     Request *req = parseRequest(raw_request);
     if (!req) 
@@ -52,7 +40,7 @@ char *handleRequest(char *raw_request)
     }
 
     /* if route does not exist what is being requested is a file */
-    unsigned err = mapRoute(req, resp);
+    unsigned short err = mapRoute(req, resp);
     if (err == HTTP_NOTFOUND)
         resp->TMPL_file = setPath(req->route);
     else
@@ -60,13 +48,11 @@ char *handleRequest(char *raw_request)
 
     renderContent(resp);
 
-    size_t len = snprintf(NULL, 0, "%s\n%s", resp->header, resp->content) + 1;
+    size_t len = snprintf(NULL, 0, "%s\n%s", resp->header, resp->content.buf) + 1;
 
     /* concat response head with the body */
     char *response = calloc(len, sizeof(char));
-    snprintf(response, len, "%s\n%s", resp->header, resp->content);
-
-    sqlite3_close(resp->db);
+    snprintf(response, len, "%s\n%s", resp->header, resp->content.buf);
 
     freeRequest(req);
     freeResponse(resp);
