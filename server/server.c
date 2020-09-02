@@ -17,33 +17,68 @@
 static int max ( int a, int b ) { return a > b ? a : b; }
 static int min ( int a, int b ) { return a < b ? a : b; }
 
-Response *initResponse()
+char *internalServerError()
 {
     Response *resp = calloc(1, sizeof(Response));
-    if (!resp) return NULL;
+
+    resp->status = SERVER_ERROR[HTTP_INTERNAL_SERVER_ERROR].status;
+
+    /* set up error array */
+    resp->errors.size = 1;
+    resp->errors.arr = calloc(resp->errors.size, sizeof(short));
+
+    addError(resp, HTTP_INTERNAL_SERVER_ERROR);
+
+    char *response = renderContent(resp);
+
+    freeResponse(resp);
+    return response;
+}
+
+
+char *makeResponse(Request *req, int routeHandler(Response *resp, Request *req))
+{
+    Response *resp = calloc(1, sizeof(Response));
+    if (!resp) return internalServerError();
 
     resp->status = SERVER_ERROR[HTTP_OK].status;
 
     /* set up error array */
     resp->errors.size = 128;
-    if ((resp->errors.arr = calloc(resp->errors.size, sizeof(unsigned short))) == 0) 
+    if ((resp->errors.arr = calloc(resp->errors.size, sizeof(short))) == 0) 
     {
+        freeRequest(req);
         freeResponse(resp);
-        return NULL;
+        return internalServerError();
     }
 
     /* open database conn */
-    if (sqlite3_open(getenv("DATABASE_URL"), &resp->db) != SQLITE_OK)
+    if (sqlite3_open_v2(getenv("DATABASE_URL"), &resp->db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK)
     {
         fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(resp->db));
-        sqlite3_close(resp->db);
 
+        freeRequest(req);
         freeResponse(resp);
-        return NULL;
+        return internalServerError();
     }
 
-    return resp;
+    /* serve the file itself */
+    if (routeHandler == 0)
+        resp->TMPL_file = setPath(req->route);
+    else
+    {
+        unsigned status = routeHandler(resp, req);
+        if (status != HTTP_OK)
+            addError(resp, status);
+    }
+
+    char *response = renderContent(resp);
+
+    freeRequest(req);
+    freeResponse(resp);
+    return response;
 }
+
 
 static char *getDictValue(Dict_t *d, char *key)
 {
@@ -161,7 +196,7 @@ static char *makeHeader(Response *resp)
 }
 
 
-void renderContent(Response *resp)
+char *renderContent(Response *resp)
 {
     addError(resp, readFileOK(resp));
 
@@ -171,7 +206,7 @@ void renderContent(Response *resp)
         TMPL_free_varlist(resp->TMPL_mainlist);
 
         TMPL_loop *loop = 0;
-        for (unsigned i = 0; resp->errors.arr[i] != 0; i++)
+        for (unsigned i = 0; i < resp->errors.size && resp->errors.arr[i] != 0; i++)
             loop = TMPL_add_varlist(loop, TMPL_add_var(0, "msg", SERVER_ERROR[resp->errors.arr[i]].msg, 0));
 
         resp->TMPL_file = setPath("error.html"); 
@@ -187,6 +222,14 @@ void renderContent(Response *resp)
     resp->content.buflen = strlen(resp->content.buf);
 
     resp->header = makeHeader(resp);
+
+    size_t len = snprintf(NULL, 0, "%s\n%s", resp->header, resp->content.buf) + 1;
+
+    /* concat response head with the body */
+    char *response = calloc(len, sizeof(char));
+    snprintf(response, len, "%s\n%s", resp->header, resp->content.buf);
+
+    return response;
 }
 
 
@@ -203,6 +246,8 @@ void addError(Response *resp, unsigned short err)
         /* if no error is found add to it */
         if (resp->errors.arr[i] == 0) break;
     }
+
+    if (i == resp->errors.size) return;
 
     resp->errors.arr[i] = err;
     resp->status = SERVER_ERROR[err].status;

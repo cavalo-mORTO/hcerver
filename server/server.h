@@ -108,11 +108,13 @@ unsigned short readFileOK(Response *resp);
 unsigned short writeFileOK(Response *resp);
 unsigned short execFileOK(Response *resp);
 
-void renderContent(Response *resp);
+char *internalServerError();
+char *makeResponse(Request *req, int routeHandler(Response *resp, Request *req));
+Request *parseRequest(char *raw);
+char *renderContent(Response *resp);
 void addError(Response *resp, unsigned short err);
 void freeRequest(Request *req);
 void freeResponse(Response *resp);
-Request *parseRequest(char *raw);
 
 char *getRequestHeader(Request *req, char *header);
 char *getRequestGetField(Request *req, char *field);
@@ -121,4 +123,3 @@ char *getRouteParam(Request *req, unsigned short pos);
 char *setPath(char *fname);
 int routeIs(Request *req, char *route);
 int routeIsRegEx(Request *req, char *regex);
-Response *initResponse();
