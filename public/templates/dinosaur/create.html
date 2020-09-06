@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container px-md-4 py-3">
+	<div class="row mb-3">
+		<div class="col-lg-12">
+			<h1>Create a new Genus</h1>
+		</div>
+	</div>
+	<form method="post" enctype='application/json'>
+		<div class="form-group row">
+			<label class="col-lg-2 col-form-label" for="name">Name</label>
+    			<input class="col-lg-10 form-control" name="name" id="name" value="{{ request.form['name'] }}" required>
+		</div>
+		<div class="form-group row">
+			<label class="col-lg-2 col-form-label" for="title">Title</label>
+    			<input class="col-lg-10 form-control" name="title" id="title" value="{{ request.json['content'] }}" required>
+		</div>
+		<div class="form-group row">
+			<label class="col-lg-2 col-form-label" for="text">Text</label>
+			<textarea class="col-lg-10 form-control" name="text" id="text" rows="6" value="{{ request.json['content'] }}" required></textarea>
+		</div>
+		<div class="form-group row">
+			<label class="col-lg-2 col-form-label" for="parent">Parent</label>
+    			<input class="col-lg-10 form-control" name="parent" id="parent" value="{{ request.form['parent'] }}" >
+		</div>
+		<div class="form-group row">
+			<label class="col-lg-2 col-form-label" for="parent">Image</label>
+    			<input class="col-lg-10 form-control" name="img" id="img" value="{{ request.form['img'] }}" >
+		</div>
+    		<input class="btn btn-primary" type="submit" value="Save">
+	</form>
+</div>
+{% endblock %}

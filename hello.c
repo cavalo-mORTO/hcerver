@@ -8,6 +8,7 @@
 
 int indexPage(Response *resp, Request *req)
 {
+<<<<<<< HEAD
     char *name = getRequestPostField(req, "name");
     // char *age = getRequestPostField(req, "age");
 
@@ -17,10 +18,17 @@ int indexPage(Response *resp, Request *req)
             "name", name, 0);
 
     return 0;
+=======
+
+    resp->TMPL_file = setPath("index.html");
+
+    return HTTP_OK;
+>>>>>>> example-app
 }
 
 int helloPage(Response *resp, Request *req)
 {
+<<<<<<< HEAD
     resp->TMPL_file = setPath("index.html");
 
     TMPL_loop *loop = 0;
@@ -38,4 +46,18 @@ int helloPage(Response *resp, Request *req)
     resp->TMPL_mainlist = TMPL_add_loop(resp->TMPL_mainlist, "hello_loop", loop);
 
     return 0;
+=======
+    getUrlEncodedForm(req);
+    char *name = getUrlEncodedFormField(req, "name");
+    char *age = getUrlEncodedFormField(req, "age");
+
+    printf("%s - %s\n", name, age);
+
+    resp->TMPL_file = setPath("hello.html");
+    resp->TMPL_mainlist = TMPL_add_var(resp->TMPL_mainlist, 
+            "hello", "I'm the index page.",
+            "name", name, 0);
+
+    return HTTP_OK;
+>>>>>>> example-app
 }
