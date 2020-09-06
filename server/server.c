@@ -24,6 +24,9 @@ static int max ( int a, int b ) { return a > b ? a : b; }
 static int min ( int a, int b ) { return a < b ? a : b; }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> parent of 0d62166... i dont know anymore
 Response *initResponse()
 {
     Response *resp = calloc(1, sizeof(Response));
@@ -52,8 +55,11 @@ Response *initResponse()
     return resp;
 }
 
+<<<<<<< HEAD
 =======
 >>>>>>> example-app
+=======
+>>>>>>> parent of 0d62166... i dont know anymore
 static char *getDictValue(Dict_t *d, char *key)
 {
     if (key == NULL) return NULL;

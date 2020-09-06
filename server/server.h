@@ -122,6 +122,9 @@ unsigned short writeFileOK(Response *resp);
 unsigned short execFileOK(Response *resp);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> parent of 0d62166... i dont know anymore
 void renderContent(Response *resp);
 void addError(Response *resp, unsigned short err);
 void freeRequest(Request *req);
@@ -136,6 +139,7 @@ char *setPath(char *fname);
 int routeIs(Request *req, char *route);
 int routeIsRegEx(Request *req, char *regex);
 Response *initResponse();
+<<<<<<< HEAD
 =======
 char *serverError(unsigned short err);
 char *makeResponse(Request *req, int routeHandler(Response *resp, Request *req));
@@ -155,3 +159,5 @@ char *setPath(char *fname);
 int routeIs(Request *req, char *route);
 int routeIsRegex(Request *req, char *regex);
 >>>>>>> example-app
+=======
+>>>>>>> parent of 0d62166... i dont know anymore
