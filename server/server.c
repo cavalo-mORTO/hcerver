@@ -10,75 +10,15 @@
 #include <regex.h>
 #include <sqlite3.h>
 
+#define JSMN_HEADER
+#include "../jsmn/jsmn.h"
+
 #include "../libctemplate/ctemplate.h"
 #include "server.h"
 
 
 static int max ( int a, int b ) { return a > b ? a : b; }
 static int min ( int a, int b ) { return a < b ? a : b; }
-
-char *internalServerError()
-{
-    Response *resp = calloc(1, sizeof(Response));
-
-    resp->status = SERVER_ERROR[HTTP_INTERNAL_SERVER_ERROR].status;
-
-    /* set up error array */
-    resp->errors.size = 1;
-    resp->errors.arr = calloc(resp->errors.size, sizeof(short));
-
-    addError(resp, HTTP_INTERNAL_SERVER_ERROR);
-
-    char *response = renderContent(resp);
-
-    freeResponse(resp);
-    return response;
-}
-
-
-char *makeResponse(Request *req, int routeHandler(Response *resp, Request *req))
-{
-    Response *resp = calloc(1, sizeof(Response));
-    if (!resp) return internalServerError();
-
-    resp->status = SERVER_ERROR[HTTP_OK].status;
-
-    /* set up error array */
-    resp->errors.size = 128;
-    if ((resp->errors.arr = calloc(resp->errors.size, sizeof(short))) == 0) 
-    {
-        freeRequest(req);
-        freeResponse(resp);
-        return internalServerError();
-    }
-
-    /* open database conn */
-    if (sqlite3_open_v2(getenv("DATABASE_URL"), &resp->db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK)
-    {
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(resp->db));
-
-        freeRequest(req);
-        freeResponse(resp);
-        return internalServerError();
-    }
-
-    /* serve the file itself */
-    if (routeHandler == 0)
-        resp->TMPL_file = setPath(req->route);
-    else
-    {
-        unsigned status = routeHandler(resp, req);
-        if (status != HTTP_OK)
-            addError(resp, status);
-    }
-
-    char *response = renderContent(resp);
-
-    freeRequest(req);
-    freeResponse(resp);
-    return response;
-}
-
 
 static char *getDictValue(Dict_t *d, char *key)
 {
@@ -111,31 +51,6 @@ static char *getMultiFormData(MultiForm_t *m, char *field)
     }
     return data;
 }
-
-char *getRequestHeader(Request *req, char *header)
-{
-    return getDictValue(req->headers, header);
-}
-
-char *getRequestGetField(Request *req, char *field)
-{
-    if (req->method != GET) return NULL;
-
-    return getDictValue(req->queries, field);
-}
-
-char *getRequestPostField(Request *req, char *field)
-{
-    if (req->method != POST) return NULL;
-
-    char *type = getRequestHeader(req, "Content-Type");
-
-    if (type != NULL && strncmp(type, "multipart/form-data", 19) == 0)
-        return getMultiFormData(req->multi, field);
-
-    return getDictValue(req->form, field);
-}
-
 
 static char *getMimeType(char *fname)
 {
@@ -195,22 +110,194 @@ static char *makeHeader(Response *resp)
     return header;
 }
 
+static void freeDict(Dict_t *d)
+{
+    if (d == NULL) return;
+
+    freeDict(d->next);
+    free(d->key);
+    free(d->value);
+    free(d);
+}
+
+static void freeMultiForm(MultiForm_t *m)
+{
+    if (m == NULL) return;
+
+    freeMultiForm(m->next);
+    freeDict(m->head);
+    free(m->data);
+    free(m);
+}
+
+static void freeRequest(Request *req)
+{
+    freeMultiForm(req->multi);
+    freeDict(req->queries);
+    freeDict(req->headers);
+    freeDict(req->form);
+    free(req->route);
+    free(req->version);
+    free(req->body);
+    free(req);
+}
+
+static void freeResponse(Response *resp)
+{
+    TMPL_free_varlist(resp->TMPL_mainlist);
+    sqlite3_close(resp->db);
+    free(resp->errors.arr);
+    free(resp->header);
+    free(resp->content.buf);
+    free(resp->TMPL_file);
+    free(resp);
+}
+
+
+
+static unsigned short checkFile(const char *fname, char permission)
+{
+    struct stat st;
+    struct group *g;
+
+    if (fname == 0) return HTTP_NOTFOUND;
+
+    /* file does not exist */
+    if (lstat(fname, &st) < 0) return HTTP_NOTFOUND;
+
+    /* group does not exist */
+    if ((g = getgrnam(PUBLIC_GROUP)) == NULL) return HTTP_FORBIDDEN;
+
+    /* file does not belong to public group */
+    if (g->gr_gid != st.st_gid) return HTTP_FORBIDDEN;
+
+    switch(permission)
+    {
+        case 'r': if ((st.st_mode & S_IRUSR) && (st.st_mode & S_IRGRP)) return HTTP_OK;  
+        case 'w': if ((st.st_mode & S_IWUSR) && (st.st_mode & S_IWGRP)) return HTTP_OK;
+        case 'x': if ((st.st_mode & S_IXUSR) && (st.st_mode & S_IXGRP)) return HTTP_OK;
+    }
+
+    return HTTP_FORBIDDEN;
+}
+
+static int regexMatch(char *matchStr, char *regexStr)
+{
+    regex_t regex;
+    int rc;
+
+    rc = regcomp(&regex, regexStr, 0);
+    if (rc) return rc;
+
+    rc = regexec(&regex, matchStr, 0, NULL, 0);
+    regfree(&regex);
+
+    return !rc;
+}
+
+
+/* export functions */
+
+char *serverError(unsigned short err)
+{
+    Response *resp = calloc(1, sizeof(Response));
+
+    /* set up error array */
+    resp->errors.size = 1;
+    resp->errors.arr = calloc(resp->errors.size, sizeof(short));
+
+    if (err != HTTP_OK)
+        addError(resp, err);
+
+    char *response = renderContent(resp);
+
+    freeResponse(resp);
+    return response;
+}
+
+
+char *makeResponse(Request *req, int routeHandler(Response *resp, Request *req))
+{
+    Response *resp = calloc(1, sizeof(Response));
+    if (!resp) return serverError(HTTP_INTERNAL_SERVER_ERROR);
+
+    resp->status = SERVER_ERROR[HTTP_OK].status;
+
+    /* set up error array */
+    resp->errors.size = 128;
+    if ((resp->errors.arr = calloc(resp->errors.size, sizeof(short))) == 0) 
+    {
+        freeRequest(req);
+        freeResponse(resp);
+        return serverError(HTTP_INTERNAL_SERVER_ERROR);
+    }
+
+    /* open database conn */
+    if (sqlite3_open_v2(getenv("DATABASE_URL"), &resp->db, DATABASE_MODE, NULL) != SQLITE_OK)
+    {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(resp->db));
+
+        freeRequest(req);
+        freeResponse(resp);
+        return serverError(HTTP_INTERNAL_SERVER_ERROR);
+    }
+
+    /* serve the file itself */
+    if (routeHandler == 0)
+        resp->TMPL_file = setPath(req->route);
+    else
+    {
+        unsigned status = routeHandler(resp, req);
+        if (status != HTTP_OK)
+            addError(resp, status);
+    }
+
+    char *response = renderContent(resp);
+
+    freeRequest(req);
+    freeResponse(resp);
+    return response;
+}
+
+char *getRequestHeader(Request *req, char *header)
+{
+    return getDictValue(req->headers, header);
+}
+
+char *getRequestGetField(Request *req, char *field)
+{
+    if (req->method != GET) return NULL;
+
+    return getDictValue(req->queries, field);
+}
+
+char *getUrlEncodedFormField(Request *req, char *field)
+{
+    return getDictValue(req->form, field);
+}
+
+char *getMultiPartFormField(Request *req, char *field)
+{
+    return getMultiFormData(req->multi, field);
+}
 
 char *renderContent(Response *resp)
 {
-    addError(resp, readFileOK(resp));
+    unsigned short err = readFileOK(resp);
+    if (err != HTTP_OK)
+        addError(resp, err);
 
     if (resp->status != SERVER_ERROR[HTTP_OK].status)
     {
         free(resp->TMPL_file);
         TMPL_free_varlist(resp->TMPL_mainlist);
 
-        TMPL_loop *loop = 0;
+        TMPL_loop *errors = 0;
         for (unsigned i = 0; i < resp->errors.size && resp->errors.arr[i] != 0; i++)
-            loop = TMPL_add_varlist(loop, TMPL_add_var(0, "msg", SERVER_ERROR[resp->errors.arr[i]].msg, 0));
+            errors = TMPL_add_varlist(errors, TMPL_add_var(0, "msg", SERVER_ERROR[resp->errors.arr[i]].msg, 0));
 
         resp->TMPL_file = setPath("error.html"); 
-        resp->TMPL_mainlist = TMPL_add_loop(0, "errors", loop);
+        resp->TMPL_mainlist = TMPL_add_loop(0, "errors", errors);
 
         char status[12];
         snprintf(status, sizeof(status), "%d", resp->status);
@@ -235,70 +322,29 @@ char *renderContent(Response *resp)
 
 void addError(Response *resp, unsigned short err)
 {
-    if (err == HTTP_OK) return;
-
     unsigned i = 0;
-    for (; i < resp->errors.size; i++)
+    for (; i < resp->errors.size && resp->errors.arr[i] != 0; i++)
     {
         /* if error already exists quit */
         if (resp->errors.arr[i] == err) return;
-
-        /* if no error is found add to it */
-        if (resp->errors.arr[i] == 0) break;
     }
 
-    if (i == resp->errors.size) return;
+    if (i == resp->errors.size)
+    {
+        unsigned short *temp = realloc(resp->errors.arr, resp->errors.size + i);
+        if (temp)
+        {
+            resp->errors.arr = temp;
+            resp->errors.size += i;
+        }
+        else return;
+    }
 
     resp->errors.arr[i] = err;
     resp->status = SERVER_ERROR[err].status;
 }
 
-
-static void freeDict(Dict_t *d)
-{
-    if (d == NULL) return;
-
-    freeDict(d->next);
-    free(d->key);
-    free(d->value);
-    free(d);
-}
-
-static void freeMultiForm(MultiForm_t *m)
-{
-    if (m == NULL) return;
-
-    freeMultiForm(m->next);
-    freeDict(m->head);
-    free(m->data);
-    free(m);
-}
-
-void freeRequest(Request *req)
-{
-    freeDict(req->queries);
-    freeDict(req->headers);
-    freeDict(req->form);
-    freeMultiForm(req->multi);
-    free(req->route);
-    free(req->version);
-    free(req->body);
-    free(req);
-}
-
-void freeResponse(Response *resp)
-{
-    free(resp->errors.arr);
-    free(resp->header);
-    free(resp->content.buf);
-    TMPL_free_varlist(resp->TMPL_mainlist);
-    free(resp->TMPL_file);
-    sqlite3_close(resp->db);
-    free(resp);
-}
-
-
-Request *parseRequest(char *raw)
+Request *parseRequest(char *raw, unsigned short *status)
 {
     Request *req = NULL;
     req = calloc(1, sizeof(Request));
@@ -313,7 +359,10 @@ Request *parseRequest(char *raw)
     else if (memcmp(raw, "HEAD", meth_len) == 0)
         req->method = HEAD;
     else
-        req->method = UNSUPPORTED;
+    {
+        *status = HTTP_BADREQUEST; 
+        return NULL;
+    }
     raw += meth_len + 1; // move past <SP>
 
     // Request-URI
@@ -328,14 +377,13 @@ Request *parseRequest(char *raw)
     
     // retrieve query
     Dict_t *query = NULL, *last_q = NULL;
-    while (1)
+    while (strchr(url, '='))
     {
-        if (!strchr(url, '=')) break;
-
         last_q = query;
         query = calloc(1, sizeof(Dict_t));
         if (!query) {
             freeRequest(req);
+            *status = HTTP_INTERNAL_SERVER_ERROR; 
             return NULL;
         }
 
@@ -370,6 +418,7 @@ Request *parseRequest(char *raw)
         header = calloc(1, sizeof(Dict_t));
         if (!header) {
             freeRequest(req);
+            *status = HTTP_INTERNAL_SERVER_ERROR; 
             return NULL;
         }
 
@@ -394,156 +443,134 @@ Request *parseRequest(char *raw)
 
     req->body = strdup(raw);
 
-    if (req->method != POST)
-        return req;
+    return req;
+};
+
+
+int getMultiPartForm(Request *req)
+{
+    char *form = req->body;
 
     char *content = getRequestHeader(req, "Content-Type");
-    if (content != NULL && strncmp(content, "multipart/form-data", 19) == 0)
+    if (content == NULL || strncmp(content, "multipart/form-data", 19) != 0)
+        return HTTP_OK;
+
+    char *boundary = strchr(content, '=') - 1;
+    boundary[0] = boundary[1] = '-';
+    size_t boundary_len = strlen(boundary);
+
+    form = strstr(form, boundary);
+
+    MultiForm_t *multi = NULL, *last_multi = NULL;
+    while (form != NULL && strncmp(form += boundary_len, "--", 2) != 0)
     {
-        char *boundary = strchr(content, '=') - 1;
-        boundary[0] = '-';
-        boundary[1] = '-';
-
-        raw = strstr(raw, boundary);
-
-        MultiForm_t *multi = NULL, *last_multi = NULL;
-        while (raw != NULL && strncmp(raw + strlen(boundary), "--", 2) != 0)
+        last_multi = multi;
+        multi = calloc(1, sizeof(MultiForm_t));
+        if (!multi)
         {
-            raw += strlen(boundary);
-
-            last_multi = multi;
-            multi = calloc(1, sizeof(MultiForm_t));
-            if (!multi)
-            {
-                freeRequest(req);
-                return NULL;
-            }
-
-            Dict_t *head = NULL, *last_head = NULL;
-            while (1)
-            {
-                last_head = head;
-                head = calloc(1, sizeof(Dict_t));
-                if (!head)
-                {
-                    freeRequest(req);
-                    return NULL;
-                }
-
-                char *key = strchr(raw, ';') + 1;
-                while (key[0] == ' ') key++;
-
-                char *key_end = strchr(key, '=');
-                head->key = strndup(key, key_end - key);
-
-                char *value = key_end + 2; 
-                char *value_end = strchr(value, '"');
-
-                head->value = strndup(value, value_end - value);
-                head->next = last_head;
-
-                raw = value_end + 1;
-
-                if (raw[0] == '\r' || raw[0] == '\n') break;
-            }
-
-            while (raw[0] == '\r' || raw[0] == '\n') raw++; 
-
-            char *data = raw;
-            char *data_end = strstr(data, boundary);
-
-            if (data_end)
-                data_end -= 2; /* discard <CR><LF> */
-            else
-                data_end = &raw[strlen(raw) - 1];
-
-            multi->head = head;
-            multi->data = strndup(data, data_end - data);
-            multi->next = last_multi;
-
-            raw = strstr(raw, boundary); /* jump to next field */
+            freeRequest(req);
+            return HTTP_INTERNAL_SERVER_ERROR;
         }
-        req->multi = multi;
-    }
-    else
-    {
-        Dict_t *post = NULL, *last_post = NULL;
+
+        Dict_t *head = NULL, *last_head = NULL;
         while (1)
         {
-            last_post = post;
-            post = calloc(1, sizeof(Dict_t));
-            if (!post)
+            last_head = head;
+            head = calloc(1, sizeof(Dict_t));
+            if (!head)
             {
                 freeRequest(req);
-                return NULL;
-            };
+                return HTTP_INTERNAL_SERVER_ERROR;
+            }
 
-            char *key = raw; 
+            char *key = strchr(form, ';') + 1;
+            while (*key == ' ') key++;
+
             char *key_end = strchr(key, '=');
+            head->key = strndup(key, key_end - key);
 
-            char *value = key_end + 1;
-            char *value_end = strchr(value, '&') ? strchr(value, '&') : strchr(value, '\0');
+            char *value = key_end + 2; 
+            char *value_end = strchr(value, '"');
 
-            post->key = strndup(key, key_end - key);
-            post->value = strndup(value, value_end - value);
-            post->next = last_post;
+            head->value = strndup(value, value_end - value);
+            head->next = last_head;
 
-            raw = value_end;
+            form = value_end + 1;
 
-            if (raw[0] == '\0') break;
-
-            raw++;
+            if (*form == '\r' || *form == '\n') break;
         }
-        req->form = post;
+
+        while (*form == '\r' || *form == '\n') form++; 
+
+        char *data = form;
+        char *data_end = strstr(data, boundary);
+
+        if (data_end)
+            data_end -= 2; /* discard <CR><LF> */
+        else
+            data_end = &form[strlen(form) - 1];
+
+        multi->head = head;
+        multi->data = strndup(data, data_end - data);
+        multi->next = last_multi;
+
+        form = strstr(form, boundary); /* jump to next field */
     }
 
-    return req;
-}
+    req->multi = multi;
+    return HTTP_OK;
+};
 
-
-static unsigned short checkFile(const char *fname, char permission)
+int getUrlEncodedForm(Request *req)
 {
-    struct stat st;
-    struct group *g;
+    char *form = req->body;
 
-    /* file does not exist */
-    if (lstat(fname, &st) < 0) return HTTP_NOTFOUND;
-
-    /* group does not exist */
-    if ((g = getgrnam(PUBLIC_GROUP)) == NULL) return HTTP_FORBIDDEN;
-
-    /* file does not belong to public group */
-    if (g->gr_gid != st.st_gid) return HTTP_FORBIDDEN;
-
-    switch(permission)
+    Dict_t *post = NULL, *last_post = NULL;
+    while (1)
     {
-        case 'r': if ((st.st_mode & S_IRUSR) && (st.st_mode & S_IRGRP)) return HTTP_OK;  
-        case 'w': if ((st.st_mode & S_IWUSR) && (st.st_mode & S_IWGRP)) return HTTP_OK;
-        case 'x': if ((st.st_mode & S_IXUSR) && (st.st_mode & S_IXGRP)) return HTTP_OK;
+        last_post = post;
+        post = calloc(1, sizeof(Dict_t));
+        if (!post)
+        {
+            freeRequest(req);
+            return HTTP_INTERNAL_SERVER_ERROR;
+        };
+
+        char *key = form; 
+        char *key_end = strchr(key, '=');
+
+        char *value = key_end + 1;
+        char *value_end = strchr(value, '&') ? strchr(value, '&') : strchr(value, '\0');
+
+        post->key = strndup(key, key_end - key);
+        post->value = strndup(value, value_end - value);
+        post->next = last_post;
+
+        form = value_end;
+
+        if (*form == '\0') break;
+
+        form++;
     }
 
-    return HTTP_FORBIDDEN;
-}
+    req->form = post;
+    return HTTP_OK;
+};
+
 
 unsigned short readFileOK(Response *resp)
 {
-    const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
-
-    return checkFile(fname, 'r');
+    return checkFile(resp->TMPL_file, 'r');
 }
 
 unsigned short writeFileOK(Response *resp)
 {
-    const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
-
-    return checkFile(fname, 'w');
+    return checkFile(resp->TMPL_file, 'w');
 }
 
 unsigned short execFileOK(Response *resp)
 {
-    const char *fname = resp->TMPL_file ? resp->TMPL_file : "";
-
-    return checkFile(fname, 'x');
+    return checkFile(resp->TMPL_file, 'x');
 }
 
 
@@ -561,7 +588,7 @@ char *setPath(char *fname)
     else if (strcmp(ext, "css") == 0)
         dir = CSS_DIR;
 
-    char *fmt = fname[0] == '/' ? "%s%s" : "%s/%s";
+    char *fmt = *fname == '/' ? "%s%s" : "%s/%s";
     size_t len = snprintf(NULL, 0, fmt, dir, fname) + 1;
 
     char *path = calloc(len, sizeof(char));
@@ -591,27 +618,12 @@ char *getRouteParam(Request *req, unsigned short pos)
 }
 
 
-static int regexMatch(char *matchStr, char *regexStr)
-{
-    regex_t regex;
-    int rc;
-
-    rc = regcomp(&regex, regexStr, 0);
-    if (rc) return rc;
-
-    rc = regexec(&regex, matchStr, 0, NULL, 0);
-    regfree(&regex);
-
-    return !rc;
-}
-
-
 int routeIs(Request *req, char *route)
 {
     return (strcmp(req->route, route) == 0);
 }
 
-int routeIsRegEx(Request *req, char *regex)
+int routeIsRegex(Request *req, char *regex)
 {
     return regexMatch(req->route, regex);
 }

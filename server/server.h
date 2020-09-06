@@ -7,9 +7,12 @@
 #define JS_DIR "public/static/js"
 #define CSS_DIR "public/static/css"
 
+#define DATABASE_MODE SQLITE_OPEN_READWRITE
+
 typedef enum
 {
     HTTP_OK,
+    HTTP_BADREQUEST,
     HTTP_FORBIDDEN,
     HTTP_NOTFOUND,
     HTTP_METHOD_NOT_ALLOWED,
@@ -28,6 +31,7 @@ struct error
 
 static const struct error SERVER_ERROR[] = {
     { 200, "The request has succeeded." },
+    { 400, "The server cannot or will not process the request due to something that is perceived to be a client error (e.g., malformed request syntax, invalid request message framing, or deceptive request routing)." },
     { 403, "The server understood the request but refuses to authorize it." },
     { 404, "The origin server did not find a current representation for the target resource or is not willing to disclose that one exists." },
     { 405, "The method received in the request-line is known by the origin server but not supported by the target resource." },
@@ -108,18 +112,20 @@ unsigned short readFileOK(Response *resp);
 unsigned short writeFileOK(Response *resp);
 unsigned short execFileOK(Response *resp);
 
-char *internalServerError();
+char *serverError(unsigned short err);
 char *makeResponse(Request *req, int routeHandler(Response *resp, Request *req));
-Request *parseRequest(char *raw);
+Request *parseRequest(char *raw, unsigned short *status);
 char *renderContent(Response *resp);
 void addError(Response *resp, unsigned short err);
-void freeRequest(Request *req);
-void freeResponse(Response *resp);
+
+int getMultiPartForm(Request *req);
+char *getMultiPartFormField(Request *req, char *field);
+int getUrlEncodedForm(Request *req);
+char *getUrlEncodedFormField(Request *req, char *field);
 
 char *getRequestHeader(Request *req, char *header);
 char *getRequestGetField(Request *req, char *field);
-char *getRequestPostField(Request *req, char *field);
 char *getRouteParam(Request *req, unsigned short pos);
 char *setPath(char *fname);
 int routeIs(Request *req, char *route);
-int routeIsRegEx(Request *req, char *regex);
+int routeIsRegex(Request *req, char *regex);

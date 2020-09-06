@@ -26,7 +26,7 @@ int main (int argc, char *argv[])
   int    desc_ready, end_server = FALSE, compress_array = FALSE;
   int    close_conn;
   char   buffer[256];
-  char   request[8096];
+  char   request[128000];
   size_t rlen;
   struct sockaddr_in6 addr;
   int    timeout;

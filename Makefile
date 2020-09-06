@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -g -I .
-OBJS = libctemplate/ctemplate.o server/server.o
+OBJS = libctemplate/ctemplate.o server/server.o jsmn/jsmn.o
 LIBS = -lsqlite3
 
 
@@ -11,6 +11,8 @@ run: *.c *.h $(OBJS)
 libctemplate/ctemplate.o: libctemplate/ctemplate.c libctemplate/ctemplate.h
 
 server/server.o: server/server.c server/server.h
+
+jsmn/jsmn.o: jsmn/jsmn.c jsmn/jsmn.h jsmn/utf8.h
 
 clean:
 	rm -f $(OBJS) *.o run
